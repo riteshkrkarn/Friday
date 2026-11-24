@@ -87,7 +87,7 @@ export function ConversationList({ searchQuery }: Props) {
                 deleteConversation(conv.id);
               }}
               disabled={isStreaming}
-              className="p-1.5 mr-1 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+              className="p-1.5 mr-1 rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
               style={{ color: 'var(--color-text-tertiary)' }}
               onMouseEnter={(e) => {
                 if (!isStreaming) e.currentTarget.style.color = 'var(--color-error)';

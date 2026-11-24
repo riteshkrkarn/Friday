@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from collections.abc import AsyncIterator, Sequence
 from typing import Any, Dict, List
 
@@ -48,7 +49,7 @@ class NIMEngine(InferenceEngine):
     # NIM is still recognised as local.
     is_cloud = True
 
-    def __init__(self, host: str | None = None, *, timeout: float = 600.0) -> None:
+    def __init__(self, host: str | None = None, *, timeout: float = 90.0) -> None:
         env_host = os.environ.get("NIM_HOST")
         self._host = (host or env_host or self._default_host).rstrip("/")
         self.is_cloud = not _host_is_local(self._host)
@@ -93,15 +94,24 @@ class NIMEngine(InferenceEngine):
         }
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
+        t0 = time.time()
+        logger.info("[NIM] Calling POST %s/chat/completions model=%s (messages=%d, tools=%s, max_tokens=%d)",
+                    self._host, model, len(messages), "tools" in payload, max_tokens)
         try:
             url = f"{self._api_prefix}/chat/completions"
             resp = self._client.post(url, json=payload, headers=self._get_headers())
+            elapsed = time.time() - t0
+            logger.info("[NIM] Response %d OK for model=%s in %.2fs", resp.status_code, model, elapsed)
             resp.raise_for_status()
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            elapsed = time.time() - t0
+            logger.error("[NIM] Connection/Timeout error for model=%s after %.2fs: %s", model, elapsed, exc)
             raise EngineConnectionError(
                 f"NIM engine not reachable at {self._host}"
             ) from exc
         except httpx.HTTPStatusError as exc:
+            elapsed = time.time() - t0
+            logger.error("[NIM] HTTP error %s for model=%s after %.2fs: %s", exc.response.status_code, model, elapsed, exc.response.text[:200])
             if exc.response.status_code in (502, 503, 504):
                 raise EngineConnectionError(
                     f"NIM engine at {self._host} returned {exc.response.status_code}"
@@ -166,6 +176,9 @@ class NIMEngine(InferenceEngine):
         }
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
+        t0 = time.time()
+        logger.info("[NIM] Starting stream POST %s/chat/completions model=%s (messages=%d, max_tokens=%d)",
+                    self._host, model, len(messages), max_tokens)
         try:
             url = f"{self._api_prefix}/chat/completions"
             async with httpx.AsyncClient(
@@ -192,11 +205,14 @@ class NIMEngine(InferenceEngine):
                         content = delta.get("content") or delta.get("reasoning_content")
                         if content:
                             yield content
+            logger.info("[NIM] Stream completed for model=%s in %.2fs", model, time.time() - t0)
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            logger.error("[NIM] Stream connection/timeout error for model=%s after %.2fs: %s", model, time.time() - t0, exc)
             raise EngineConnectionError(
                 f"NIM engine not reachable at {self._host}"
             ) from exc
         except httpx.HTTPStatusError as exc:
+            logger.error("[NIM] Stream HTTP error %s for model=%s after %.2fs: %s", exc.response.status_code, model, time.time() - t0, exc.response.text[:200])
             if exc.response.status_code in (502, 503, 504):
                 raise EngineConnectionError(
                     f"NIM engine at {self._host} returned {exc.response.status_code}"
@@ -224,6 +240,9 @@ class NIMEngine(InferenceEngine):
         }
         if "tools" in payload and "tool_choice" not in payload:
             payload["tool_choice"] = "auto"
+        t0 = time.time()
+        logger.info("[NIM] Starting stream_full POST %s/chat/completions model=%s (tools=%s, max_tokens=%d)",
+                    self._host, model, "tools" in payload, max_tokens)
         try:
             url = f"{self._api_prefix}/chat/completions"
             async with httpx.AsyncClient(
@@ -260,11 +279,14 @@ class NIMEngine(InferenceEngine):
                                 finish_reason=finish,
                                 usage=usage,
                             )
+            logger.info("[NIM] stream_full completed for model=%s in %.2fs", model, time.time() - t0)
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            logger.error("[NIM] stream_full connection/timeout error for model=%s after %.2fs: %s", model, time.time() - t0, exc)
             raise EngineConnectionError(
                 f"NIM engine not reachable at {self._host}"
             ) from exc
         except httpx.HTTPStatusError as exc:
+            logger.error("[NIM] stream_full HTTP error %s for model=%s after %.2fs: %s", exc.response.status_code, model, time.time() - t0, exc.response.text[:200])
             if exc.response.status_code in (502, 503, 504):
                 raise EngineConnectionError(
                     f"NIM engine at {self._host} returned {exc.response.status_code}"

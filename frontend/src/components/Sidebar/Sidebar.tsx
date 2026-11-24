@@ -70,6 +70,7 @@ export function Sidebar() {
           onClick={toggleSidebar}
           className="fixed top-3 left-3 z-30 p-2 rounded-lg transition-colors cursor-pointer"
           style={{ color: 'var(--color-text-secondary)', background: 'var(--color-bg-secondary)' }}
+          aria-label="Open sidebar"
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-secondary)')}
         >
@@ -97,6 +98,7 @@ export function Sidebar() {
               onClick={toggleSidebar}
               className="p-2 rounded-lg transition-colors cursor-pointer"
               style={{ color: 'var(--color-text-secondary)' }}
+              aria-label="Close sidebar"
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
@@ -107,6 +109,7 @@ export function Sidebar() {
                 onClick={() => updateSettings({ theme: nextTheme })}
                 className="p-2 rounded-lg transition-colors cursor-pointer"
                 style={{ color: 'var(--color-text-secondary)' }}
+                aria-label={`Switch theme to ${nextTheme}`}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 title={`Theme: ${settings.theme} (click for ${nextTheme})`}
@@ -117,6 +120,7 @@ export function Sidebar() {
                 onClick={handleNewChat}
                 className="p-2 rounded-lg transition-colors cursor-pointer"
                 style={{ color: 'var(--color-text-secondary)' }}
+                aria-label="Start new chat"
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 title="New chat"

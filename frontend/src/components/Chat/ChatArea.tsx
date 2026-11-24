@@ -140,6 +140,7 @@ export function ChatArea() {
           onClick={toggleSystemPanel}
           className="p-1.5 rounded-md transition-colors cursor-pointer"
           style={{ color: 'var(--color-text-tertiary)' }}
+          aria-label={`${systemPanelOpen ? 'Hide' : 'Show'} system panel`}
           title={`${systemPanelOpen ? 'Hide' : 'Show'} system panel (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+I)`}
         >
           <PanelIcon size={16} />

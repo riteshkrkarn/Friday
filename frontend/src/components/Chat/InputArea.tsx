@@ -620,6 +620,7 @@ export function InputArea() {
             className="p-2 rounded-xl transition-colors shrink-0 cursor-pointer"
             style={{ background: 'var(--color-error)', color: 'var(--color-on-accent)' }}
             title="Stop generating"
+            aria-label="Stop generating"
           >
             <Square size={16} />
           </button>
@@ -636,6 +637,7 @@ export function InputArea() {
               disabled={streamState.isStreaming || !input.trim() || modelLoading || !selectedModel}
               title={selectedModel ? 'Send message' : 'Pick a model first (⌘K)'}
               className="p-2 rounded-xl transition-colors shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-default"
+              aria-label="Send message"
               style={{
                 background: input.trim() ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
                 color: input.trim() ? 'white' : 'var(--color-text-tertiary)',

@@ -217,6 +217,15 @@ def serve(
     print_banner(quiet=(ctx.obj or {}).get("quiet", False))
     console = Console(stderr=True)
 
+    # Configure openjarvis logging so engine/stream logs appear in console
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+        force=True,
+    )
+    logging.getLogger("openjarvis").setLevel(logging.INFO)
+
     # Check for server dependencies
     try:
         import uvicorn  # noqa: F401

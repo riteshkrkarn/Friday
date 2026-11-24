@@ -788,9 +788,17 @@ class CloudEngine(InferenceEngine):
             "temperature": temperature,
             **kwargs,
         }
+        logger.info("[GROQ] Calling Groq API model=%s (actual=%s, messages=%d, tools=%s)",
+                    model, actual_model, len(messages), "tools" in kwargs)
         t0 = time.monotonic()
-        resp = self._groq_client.chat.completions.create(**create_kwargs)
-        elapsed = time.monotonic() - t0
+        try:
+            resp = self._groq_client.chat.completions.create(**create_kwargs)
+            elapsed = time.monotonic() - t0
+            logger.info("[GROQ] Response OK for model=%s in %.2fs", actual_model, elapsed)
+        except Exception as exc:
+            elapsed = time.monotonic() - t0
+            logger.error("[GROQ] Request failed for model=%s after %.2fs: %s", actual_model, elapsed, exc)
+            raise
         choice = resp.choices[0]
         usage = resp.usage
         prompt_tokens = usage.prompt_tokens if usage else 0

@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import threading
+import time
 import uuid
 import weakref
 from dataclasses import replace
@@ -162,6 +163,9 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
     engine = request.app.state.engine
     agent = getattr(request.app.state, "agent", None)
     model = request_body.model
+    logger = logging.getLogger("openjarvis.server")
+    logger.info("--> [CHAT] Incoming request: model=%s stream=%s msgs=%d tools=%s",
+                model, request_body.stream, len(request_body.messages), bool(request_body.tools))
     use_server_agent = (
         agent is not None
         and not request_body.tools
@@ -677,11 +681,12 @@ def _handle_agent(
     # Last message is the input
     input_text = req.messages[-1].content if req.messages else ""
 
-    # Override agent model for this request if the caller specified one.
-    # Locked for the full override-run-restore cycle (#759): only the
-    # override/restore lines racing wouldn't be enough, since agent.run()
-    # itself reads self._model throughout the call.
+    logger = logging.getLogger("openjarvis.server")
+    t0 = time.time()
+    logger.info("[AGENT] _handle_agent: waiting for lock (model=%s, input=%r)", model, input_text[:60])
     with _get_agent_model_lock(agent):
+        t_lock = time.time()
+        logger.info("[AGENT] Acquired model lock in %.3fs (model=%s). Executing agent...", t_lock - t0, model)
         original_model = agent._model
         if model:
             agent._model = model
@@ -693,6 +698,13 @@ def _handle_agent(
                 result = collector.run(input_text, context=ctx)
             else:
                 result = agent.run(input_text, context=ctx)
+            elapsed = time.time() - t_lock
+            logger.info("[AGENT] Completed in %.2fs (model=%s, prompt_tokens=%s, completion_tokens=%s)",
+                        elapsed, model, result.metadata.get("prompt_tokens"), result.metadata.get("completion_tokens"))
+        except Exception as exc:
+            elapsed = time.time() - t_lock
+            logger.error("[AGENT] Execution failed after %.2fs (model=%s): %s", elapsed, model, exc, exc_info=True)
+            raise
         finally:
             agent._model = original_model
 
@@ -759,6 +771,9 @@ async def _handle_agent_stream(
             break
 
     async def generate():
+        logger = logging.getLogger("openjarvis.server")
+        t_stream_start = time.time()
+        logger.info("[AGENT-STREAM] Started SSE stream for model=%s query=%r", model, query_text[:60])
         first_chunk = ChatCompletionChunk(
             id=chunk_id,
             model=model,
@@ -767,18 +782,42 @@ async def _handle_agent_stream(
         yield f"data: {first_chunk.model_dump_json()}\n\n"
 
         try:
-            response = await asyncio.to_thread(
-                _handle_agent,
-                agent,
-                model,
-                req,
-                complexity_info,
-                trace_store=trace_store,
-                bus=bus,
+            # 120s timeout ensures slow/hung models don't permanently stall the stream and lock
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _handle_agent,
+                    agent,
+                    model,
+                    req,
+                    complexity_info,
+                    trace_store=trace_store,
+                    bus=bus,
+                ),
+                timeout=120.0,
             )
+            logger.info("[AGENT-STREAM] Completed for model=%s in %.2fs", model, time.time() - t_stream_start)
+        except asyncio.TimeoutError:
+            logger.error("[AGENT-STREAM] Timed out after 120s waiting for agent (model=%s)", model)
+            error_chunk = ChatCompletionChunk(
+                id=chunk_id,
+                model=model,
+                choices=[
+                    StreamChoice(
+                        delta=DeltaMessage(
+                            content=f"Sorry, the request for model '{model}' timed out after 120 seconds. The upstream inference provider is slow or unresponsive.",
+                        ),
+                        finish_reason="stop",
+                    )
+                ],
+            )
+            yield f"data: {error_chunk.model_dump_json()}\n\n"
+            yield "data: [DONE]\n\n"
+            return
         except Exception as exc:
-            logging.getLogger("openjarvis.server").error(
-                "Agent stream error: %s",
+            logger.error(
+                "[AGENT-STREAM] Error for model=%s after %.2fs: %s",
+                model,
+                time.time() - t_stream_start,
                 exc,
                 exc_info=True,
             )
@@ -1060,6 +1099,7 @@ async def _handle_stream(
                         model, messages, req.temperature, req.max_tokens
                     )
                 else:
+                    logging.getLogger("openjarvis.server").info("[DIRECT-STREAM] Started streaming tokens: model=%s", model)
                     token_iter = engine.stream(
                         messages,
                         model=model,
@@ -1078,6 +1118,8 @@ async def _handle_stream(
                     ],
                 )
                 yield f"data: {chunk.model_dump_json()}\n\n"
+            logging.getLogger("openjarvis.server").info("[DIRECT-STREAM] Stream completed: model=%s (length=%d, elapsed=%.2fs)",
+                                                        model, len(full_content), time.time() - started_at)
         except Exception as exc:
             # Surface errors as a content chunk so the frontend can
             # display them instead of silently failing.

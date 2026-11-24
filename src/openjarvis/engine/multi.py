@@ -97,7 +97,9 @@ class MultiEngine(InferenceEngine):
         max_tokens: int = 1024,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        return self._engine_for(model).generate(
+        engine = self._engine_for(model)
+        logger.info("[MULTI] Routing generate model=%s -> engine=%s", model, type(engine).__name__)
+        return engine.generate(
             messages,
             model=model,
             temperature=temperature,
@@ -114,7 +116,9 @@ class MultiEngine(InferenceEngine):
         max_tokens: int = 1024,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        async for token in self._engine_for(model).stream(
+        engine = self._engine_for(model)
+        logger.info("[MULTI] Routing stream model=%s -> engine=%s", model, type(engine).__name__)
+        async for token in engine.stream(
             messages,
             model=model,
             temperature=temperature,
