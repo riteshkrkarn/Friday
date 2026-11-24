@@ -32,40 +32,43 @@ export function LogsPage() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden px-6 py-10">
       <div className="max-w-4xl mx-auto w-full flex flex-col flex-1 overflow-hidden">
-        <header className="mb-6 shrink-0">
+        <header className="mb-5 pb-4 shrink-0" style={{ borderBottom: '1px solid var(--color-border)' }}>
           <div className="flex items-center justify-between gap-3">
-            <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-              Logs
-            </h1>
+            <div className="flex items-center gap-2.5">
+              <span className="hw-led" style={{ background: 'var(--color-success)' }} />
+              <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+                Logs
+              </h1>
+            </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              <span className="text-xs hw-mono" style={{ color: 'var(--color-text-tertiary)' }}>
                 {logEntries.length} entries
               </span>
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
+                style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
               >
                 <Copy size={12} /> Copy All
               </button>
               <button
                 onClick={clearLogs}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
+                style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
               >
                 <Trash2 size={12} /> Clear
               </button>
             </div>
           </div>
-          <p className="text-sm mt-2 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
+          <p className="text-sm mt-1.5 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
             Recent activity — chat events, model switches, tool calls, and system messages from this session.
           </p>
         </header>
 
         {/* Log entries */}
         <div
-          className="flex-1 overflow-y-auto rounded-xl p-4 font-mono text-xs leading-relaxed"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+          className="flex-1 overflow-y-auto rounded-lg p-4 hw-mono text-xs leading-relaxed"
+          style={{ background: 'var(--color-code-bg)', border: '1px solid var(--color-border)' }}
         >
           {logEntries.length === 0 ? (
             <div className="text-center py-12" style={{ color: 'var(--color-text-tertiary)' }}>

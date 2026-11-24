@@ -306,10 +306,10 @@ export function CommandPalette() {
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
       onClick={() => setCommandPaletteOpen(false)}
     >
-      <div className="fixed inset-0" style={{ background: 'rgba(0,0,0,0.5)' }} />
+      <div className="fixed inset-0" style={{ background: 'rgba(0,0,0,0.65)' }} />
 
       <div
-        className="relative w-full max-w-lg rounded-xl overflow-hidden"
+        className="relative w-full max-w-lg rounded-lg overflow-hidden"
         style={{
           background: 'var(--color-surface)',
           border: '1px solid var(--color-border)',

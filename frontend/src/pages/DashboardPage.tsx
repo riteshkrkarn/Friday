@@ -9,17 +9,20 @@ export function DashboardPage() {
   return (
     <div className="flex-1 overflow-y-auto px-6 py-10">
       <div className="max-w-5xl mx-auto">
-        <header className="mb-6">
+        <header className="mb-6 pb-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-              System Overview
-            </h1>
-            <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            <div className="flex items-center gap-2.5">
+              <span className="hw-led" style={{ background: 'var(--color-accent)' }} />
+              <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+                System Overview
+              </h1>
+            </div>
+            <div className="text-xs hw-mono" style={{ color: 'var(--color-text-tertiary)' }}>
               {stamp}
             </div>
           </div>
-          <p className="text-sm mt-2 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
-            Live telemetry for the on-device inference engine — power draw, token throughput, and cost savings versus cloud APIs.
+          <p className="text-sm mt-1.5 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
+            Live telemetry for the inference engine — power draw, token throughput, and cost savings versus cloud APIs.
           </p>
         </header>
 

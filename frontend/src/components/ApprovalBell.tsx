@@ -20,7 +20,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export function ApprovalBell() {
+export function ApprovalBell({ inline = false }: { inline?: boolean } = {}) {
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -75,7 +75,7 @@ export function ApprovalBell() {
   const count = approvals.length;
 
   return (
-    <div ref={containerRef} className="fixed top-2 right-3 z-40">
+    <div ref={containerRef} className={inline ? 'relative' : 'fixed top-2 right-3 z-40'}>
       {/* Bell trigger */}
       <button
         onClick={() => setOpen(o => !o)}

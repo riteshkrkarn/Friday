@@ -114,7 +114,7 @@ interface Settings {
 
 function loadSettings(): Settings {
   const defaults: Settings = {
-    theme: 'system',
+    theme: 'dark',
     apiUrl: '',
     apiKey: '',
     fontSize: 'default',

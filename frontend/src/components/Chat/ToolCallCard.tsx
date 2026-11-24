@@ -43,29 +43,28 @@ export function ToolCallCard({ toolCall }: Props) {
 
   return (
     <div
-      className="rounded-md text-xs overflow-hidden"
+      className="rounded-md text-xs overflow-hidden hw-mono"
       style={{
-        border: '1px solid var(--color-border-subtle, var(--color-border))',
-        background: 'var(--color-bg-tertiary, var(--color-bg-secondary))',
-        fontFamily:
-          'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+        border: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
       }}
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-2.5 py-1.5 cursor-pointer text-left"
+        className="flex items-center gap-2 w-full px-3 py-2 cursor-pointer text-left"
         style={{ background: 'transparent' }}
       >
         {expanded ? (
-          <ChevronDown size={11} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+          <ChevronDown size={12} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
         ) : (
-          <ChevronRight size={11} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
+          <ChevronRight size={12} style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
         )}
         <StatusIcon
-          size={11}
+          size={12}
           style={{ color: config.color, flexShrink: 0 }}
           className={toolCall.status === 'running' ? 'animate-spin' : ''}
         />
+        <span style={{ color: 'var(--color-text-tertiary)', fontSize: 10 }}>TOOL:</span>
         <span
           style={{ color: 'var(--color-text)', fontWeight: 500, flexShrink: 0 }}
         >

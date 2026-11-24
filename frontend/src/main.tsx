@@ -1,5 +1,6 @@
 // Must stay the first import: fills in crypto.randomUUID before any module uses it.
 import './lib/polyfills';
+import '@fontsource-variable/geist';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
@@ -13,7 +14,7 @@ function applyTheme() {
   try {
     const raw = localStorage.getItem('openjarvis-settings');
     const settings = raw ? JSON.parse(raw) : {};
-    const theme = settings.theme || 'system';
+    const theme = settings.theme || 'dark';
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');

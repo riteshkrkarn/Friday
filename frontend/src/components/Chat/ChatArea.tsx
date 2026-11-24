@@ -6,7 +6,7 @@ import { StreamingDots } from './StreamingDots';
 import { useAppStore } from '../../lib/store';
 import { shouldAutoplayFinishedReply, useTtsStore } from '../../lib/tts';
 import { stripThinkTags } from '../../lib/message-text';
-import { Sparkles, PanelRightOpen, PanelRightClose, Database, MessageSquare, X } from 'lucide-react';
+import { Sparkles, PanelRightOpen, PanelRightClose, Database, MessageSquare, X, Terminal } from 'lucide-react';
 import { listConnectors } from '../../lib/connectors-api';
 
 function getGreeting(): string {
@@ -184,46 +184,62 @@ export function ChatArea() {
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center h-full px-4">
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
+              className="w-11 h-11 rounded-lg flex items-center justify-center mb-4"
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-accent)',
+              }}
             >
-              <Sparkles size={24} />
+              <Terminal size={20} />
             </div>
-            <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
+            <h2 className="text-xl font-semibold tracking-tight mb-1.5" style={{ color: 'var(--color-text)' }}>
               {getGreeting()}
             </h2>
-            <p className="text-sm text-center max-w-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>
-              Ask anything. Your AI runs locally — private, fast, and always available.
+            <p className="text-sm text-center max-w-md mb-6" style={{ color: 'var(--color-text-secondary)' }}>
+              Ask OpenJarvis anything, run local or cloud inference, or orchestrate tools across your workspace.
             </p>
 
             {/* Quick action hints */}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap justify-center gap-2.5">
               <button
                 onClick={() => navigate('/data-sources')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-medium cursor-pointer transition-colors"
                 style={{
-                  background: 'var(--color-bg-secondary)',
+                  background: 'var(--color-surface)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text-secondary)',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-accent)';
+                  e.currentTarget.style.color = 'var(--color-text)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-border)';
+                  e.currentTarget.style.color = 'var(--color-text-secondary)';
+                }}
               >
                 <Database size={14} style={{ color: 'var(--color-accent)' }} />
                 Connect Data Sources
               </button>
               <button
                 onClick={() => { navigate('/data-sources'); setTimeout(() => window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'messaging' })), 100); }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-medium cursor-pointer transition-colors"
                 style={{
-                  background: 'var(--color-bg-secondary)',
+                  background: 'var(--color-surface)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text-secondary)',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-accent)';
+                  e.currentTarget.style.color = 'var(--color-text)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--color-border)';
+                  e.currentTarget.style.color = 'var(--color-text-secondary)';
+                }}
               >
-                <MessageSquare size={14} style={{ color: 'var(--color-accent)' }} />
+                <MessageSquare size={14} style={{ color: 'var(--color-accent-blue)' }} />
                 Set Up Messaging Channels
               </button>
             </div>

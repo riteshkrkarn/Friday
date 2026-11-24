@@ -132,14 +132,14 @@ export function MessageBubble({ message, isLive = false }: Props) {
 
   if (isUser) {
     return (
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end mb-5">
         <div
           dir="auto"
-          className="max-w-[85%] px-4 py-2.5 text-sm leading-relaxed"
+          className="max-w-[85%] px-4 py-2.5 text-sm leading-relaxed rounded-lg"
           style={{
             background: 'var(--color-user-bubble)',
             color: 'var(--color-user-bubble-text)',
-            borderRadius: 'var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl)',
+            border: '1px solid var(--color-border)',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
           }}

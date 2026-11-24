@@ -107,8 +107,11 @@ export function XRayFooter({ usage, telemetry, isResearch = false }: Props) {
       {/* Expanded trace */}
       {expanded && rows.length > 0 && (
         <div
-          className="rounded-lg mt-1 px-3 py-2"
-          style={{ background: 'rgba(0, 0, 0, 0.15)' }}
+          className="rounded-md mt-1 px-3 py-2"
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+          }}
         >
           <div className="grid gap-y-0.5" style={{ gridTemplateColumns: 'auto 1fr', columnGap: '1rem' }}>
             {rows.map((row) => (

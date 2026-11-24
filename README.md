@@ -1,172 +1,106 @@
 <div align="center">
-  <img alt="OpenJarvis" src="assets/OpenJarvis_Horizontal_Logo.png" width="400">
+  <img alt="OpenJarvis" src="assets/OpenJarvis_Horizontal_Logo.png" width="360">
 
-  <p><i>Personal AI, On Personal Devices.</i></p>
+  <h1>Second Me</h1>
+  <p><i>A personal AI assistant built on top of <a href="https://github.com/open-jarvis/OpenJarvis">OpenJarvis</a> (Apache 2.0).</i></p>
 
   <p>
-    <a href="https://arxiv.org/abs/2605.17172"><img src="https://img.shields.io/badge/arXiv-2605.17172-b31b1b.svg" alt="arXiv"></a>
-    <a href="https://openjarvis.stanford.edu/"><img src="https://img.shields.io/badge/project-OpenJarvis-blue" alt="Project"></a>
-    <a href="https://open-jarvis.github.io/OpenJarvis/"><img src="https://img.shields.io/badge/docs-mkdocs-blue" alt="Docs"></a>
-    <img src="https://img.shields.io/badge/python-%3E%3D3.11-blue" alt="Python">
-    <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
-    <a href="https://discord.gg/CMVBmDQ5Fj"><img src="https://img.shields.io/badge/discord-join-7289da?logo=discord&logoColor=white" alt="Discord"></a>
-    <a href="https://x.com/OpenJarvisAI"><img src="https://img.shields.io/badge/X-@OpenJarvisAI-black?logo=x&logoColor=white" alt="X / Twitter"></a>
+    <img src="https://img.shields.io/badge/base-OpenJarvis-blue" alt="Base: OpenJarvis">
+    <img src="https://img.shields.io/badge/python-3.11%E2%80%933.13-blue" alt="Python 3.11-3.13">
+    <img src="https://img.shields.io/badge/inference-NVIDIA%20NIM%20%2B%20Groq-ff5722" alt="Inference: NVIDIA NIM + Groq">
+    <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License: Apache 2.0">
   </p>
 </div>
 
 ---
 
-<div align="center">
-  <img alt="OpenJarvis demo reel" src="assets/openjarvis_demo_reel.webp" width="75%">
-</div>
+## Overview
+
+**Second Me** is a personal assistant designed to sit beside you throughout your daily workflow on Windows. Built on the OpenJarvis agentic runtime and trace/memory primitives, it is tailored to remember your **projects, hackathons, deadlines, achievements, bills, and expected income**, surface timely reminders, generate personalized briefings, and learn from your repeated habits.
 
 ---
 
-> **[Documentation](https://open-jarvis.github.io/OpenJarvis/)**
->
-> **[Project Site](https://openjarvis.stanford.edu/)**
->
-> **[Paper](https://arxiv.org/abs/2605.17172)**
->
-> **[Leaderboard](https://open-jarvis.github.io/OpenJarvis/leaderboard/)**
->
-> **[Roadmap](https://open-jarvis.github.io/OpenJarvis/development/roadmap/)**
+## Current Architecture
 
-## Why OpenJarvis?
+- **Inference Layer (Cloud-First, Free Tier):**
+  - **NVIDIA NIM** (`nvidia/nemotron-3-ultra-550b-a55b`, `minimaxai/minimax-m3.1-flash`, `nvidia/nemotron-3.5-super-vl-120b-a12b`, `meta/muse-glimmer-30b`, `nvidia/nemotron-3.5-bolt-e4b`)
+  - **Groq** (`groq/openai/gpt-oss-120b`, `groq/qwen/qwen3.8-27b`, `groq/openai/gpt-oss-20b`, `groq/allam-2-7b`)
+  - Swappable multi-engine router (`multi`) with automatic `.env` credential loading (`NIM_API_KEY`, `GROQ_API_KEY`).
+- **Backend Server (`src/openjarvis/server`):**
+  - FastAPI OpenAI-compatible API server (`jarvis serve`) with tool-calling agent loop (`orchestrator` / `native_openhands`), SSE streaming, SQLite persistence, and real-time console request/latency logging.
+- **Frontend (`frontend/`):**
+  - React 19 + TypeScript + Vite + Tailwind CSS UI featuring a **Nordic Hardware** dark-first theme (with light mode toggle), top hardware telemetry strip, `⌘K` model & cloud key palette, Deep Research mode, Agents, Data Sources, Logs, and Dashboard.
 
-Personal AI agents are exploding in popularity, but nearly all of them still route intelligence through cloud APIs. Your "personal" AI continues to depend on someone else's server. At the same time, our [Intelligence Per Watt](https://www.intelligence-per-watt.ai/) research showed that local language models already handle 88.7% of single-turn chat and reasoning queries, with intelligence efficiency improving 5.3× from 2023 to 2025. The models and hardware are increasingly ready. What has been missing is the software stack to make local-first personal AI practical.
-
-OpenJarvis is that stack. It is a framework for local-first personal AI, built around three core ideas: shared primitives for building on-device agents; evaluations that treat energy, FLOPs, latency, and dollar cost as first-class constraints alongside accuracy; and a learning loop that improves models using local trace data. The goal is simple: make it possible to build personal AI agents that run locally by default, calling the cloud only when truly necessary. OpenJarvis aims to be both a research platform and a production foundation for local AI, in the spirit of PyTorch.
-
-## Installation
-
-Pick your platform and run one command. Each installer handles [uv](https://docs.astral.sh/uv/), the Python venv, Ollama, and a starter model — about 3 minutes on broadband.
-
-| Platform | One-liner |
-|---|---|
-| **macOS · Linux · WSL2** | `curl -fsSL https://open-jarvis.github.io/OpenJarvis/install.sh \| bash` |
-| **Native Windows** | `irm https://open-jarvis.github.io/OpenJarvis/install.ps1 \| iex` |
-| **Desktop GUI** | Download `.exe` / `.dmg` / `.deb` / `.rpm` / `.AppImage` from the [latest release](https://github.com/open-jarvis/OpenJarvis/releases/latest) |
-
-Then `jarvis` to start. The Rust extension and larger models continue downloading in the background; `jarvis doctor` shows status.
-
-Platform-specific notes (WSL2 setup, native-Windows scheduled-task service, desktop prerequisites, manual / contributor install): see the [installation docs](https://open-jarvis.github.io/OpenJarvis/getting-started/install/).
+---
 
 ## Quick Start
 
-```bash
-jarvis                          # start chatting (default: chat-simple)
-jarvis gui                      # start the graphical browser interface
-jarvis init --preset <name> --force  # replace config with a starter preset
+### 1. Configure API Keys
+Create a `.env` file in the repository root with your free-tier cloud keys:
+
+```env
+NIM_API_KEY=nvapi-...
+GROQ_API_KEY=gsk_...
 ```
 
-`jarvis gui` starts the local API server and frontend, then opens the graphical
-chat interface in your default browser. It requires Node.js 22+ and is
-available from a source checkout; packaged desktop installers are available
-from the [latest release](https://github.com/open-jarvis/OpenJarvis/releases/latest).
+### 2. Start the Backend
+```powershell
+uv run jarvis serve
+```
+The API server starts on `http://127.0.0.1:8000` with live request and engine telemetry logs.
 
-> Prefix `jarvis ...` with `uv run`, or `source .venv/bin/activate` first.
+### 3. Start the Frontend (Dev Mode)
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+Open `http://localhost:5173` in your browser (or run `npm run build` to bundle into `src/openjarvis/server/static/`).
 
-| Preset | What it does |
-|---|---|
-| `morning-digest-mac` / `morning-digest-linux` / `morning-digest-minimal` | Spoken daily briefing from email, calendar, health, news |
-| `deep-research` | Multi-hop research across indexed docs with citations |
-| `code-assistant` | Agent with code execution, file I/O, and shell access |
-| `scheduled-monitor` | Stateful agent on a schedule with memory |
-| `chat-simple` | Lightweight conversation, no tools |
+### 4. Run Tests
+```powershell
+# Backend cloud key & model endpoint tests
+$env:PYTHONPATH="src"; uv run pytest tests/engine/test_cloud_endpoints.py -v
 
-Example:
-
-```bash
-jarvis init --preset morning-digest-mac --force
-jarvis connect gdrive          # one OAuth covers Gmail / Calendar / Tasks
-jarvis digest --fresh          # generate and play your first briefing
+# Frontend unit tests
+cd frontend; npm test
 ```
 
-Per-preset deep dives: [morning digest](https://open-jarvis.github.io/OpenJarvis/user-guide/morning-digest/) · [deep research](https://open-jarvis.github.io/OpenJarvis/user-guide/deep-research/) · [code assistant](https://open-jarvis.github.io/OpenJarvis/user-guide/code-assistant/) · [scheduled monitor](https://open-jarvis.github.io/OpenJarvis/user-guide/scheduled-monitor/) · [chat simple](https://open-jarvis.github.io/OpenJarvis/user-guide/chat-simple/) · or the full [quickstart guide](https://open-jarvis.github.io/OpenJarvis/getting-started/quickstart/).
+---
 
-### Skills
+## Roadmap (`PLAN.md`)
 
-Skills teach agents how to better use tools and improve their reasoning. Every skill is a tool — agents discover them from a catalog and invoke them on demand.
+### v1 Scope
+1. **Quick Capture by Voice:** Double-tap Right `Ctrl` (configurable hotkey) to record voice notes -> STT (local Whisper first, Deepgram fallback) -> save directly to the item store, with Telegram text fallback.
+2. **Item Store (SQLite):** Track `hackathon`, `project`, `task`, `achievement`, `bill`, and `income` items with title, type, deadline/due date, amount (for bills and income), status, notes, and created date — searchable and filterable by type, status, and date. Supports recurring or one-time bills and expected income (e.g., salary or stipend).
+3. **Smart Reminders:** Daily check of upcoming deadlines with configurable lead time, resume/portfolio update reminders for completed projects/wins, advance **bill due reminders**, and **expected income tracking** (notifying when due and flagging if late). Delivery order: Email -> Telegram -> Web UI.
+4. **Personalized Reports:** Morning brief and custom reports built from your saved items, deadlines, pending updates, bills/income, and priorities.
+5. **Repetition Learning:** Tracks repeated requests/patterns and proposes new automation rules after a repeat threshold (default: 3), always requiring confirmation before acting.
+6. **Cloud Model Setup & Tests:** Swappable NIM/Groq inference backed by automated endpoint and key verification tests.
 
-```bash
-# Install skills from public sources
-jarvis skill install hermes:arxiv
-jarvis skill sync hermes --category research
+### Finance & Privacy (v1)
+- Bills and income are added manually via voice or text (no bank login integration in v1).
+- Never stores bank passwords, card numbers, or account numbers.
+- Prompts sent to cloud endpoints (NVIDIA NIM / Groq) include the text you send; local-model routing for sensitive finance queries is planned as a future option.
 
-# Use skills with any agent
-jarvis ask "Use the code-explainer skill to explain this Python code: for i in range(5): print(i*2)"
+### Later (Post-v1)
+- **Achievement Prompts:** Post-win/project prompts to update resume or portfolio items.
+- **Interactive Career & Workload Discussion:** Grounded in your saved item history.
+- **Schedule Generation:** Daily/weekly time-blocking suggestions derived from open tasks and deadlines.
 
-# Optimize skills from your trace history
-jarvis optimize skills --policy dspy
+### Out of Scope
+- Automated portfolio/resume file export.
+- Local LLM inference (v1 uses cloud endpoints).
 
-# Benchmark the impact
-jarvis bench skills --max-samples 5 --seeds 42
-```
+---
 
-Import from [Hermes Agent](https://github.com/NousResearch/hermes-agent) (~150 skills), [OpenClaw](https://github.com/openclaw/skills) (~13,700 community skills), or any GitHub repo. Skills follow the [agentskills.io](https://agentskills.io/specification) open standard.
+## Base Project & Attribution
 
-See the [Skills User Guide](https://open-jarvis.github.io/OpenJarvis/user-guide/skills/) and [Skills Tutorial](https://open-jarvis.github.io/OpenJarvis/tutorials/skills-workflow/) for details.
+This project is built on **[OpenJarvis](https://github.com/open-jarvis/OpenJarvis)** (*Personal AI, On Personal Devices*), created as part of the Intelligence Per Watt initiative at Hazy Research and the Scaling Intelligence Lab at Stanford SAIL.
 
-### Built-in Agents
+<details>
+<summary>OpenJarvis Citation</summary>
 
-OpenJarvis ships with eight built-in agents across three execution modes (on-demand, scheduled, continuous):
-
-| Agent | Type | What it does |
-|-------|------|-------------|
-| `morning_digest` | Scheduled | Daily briefing from email, calendar, health, news — with TTS audio |
-| `deep_research` | On-demand | Multi-hop research with citations across web and local docs |
-| `monitor_operative` | Continuous | Long-horizon monitoring with memory, compression, and retrieval |
-| `orchestrator` | On-demand | Multi-turn reasoning with automatic tool selection |
-| `native_react` | On-demand | ReAct (Thought-Action-Observation) loop agent |
-| `operative` | Continuous | Persistent autonomous agent with state management |
-| `native_openhands` | On-demand | CodeAct — generates and executes Python code |
-| `simple` | On-demand | Single-turn chat, no tools |
-
-See the [User Guide](https://open-jarvis.github.io/OpenJarvis/user-guide/morning-digest/) and [Tutorials](https://open-jarvis.github.io/OpenJarvis/tutorials/) for detailed setup instructions.
-
-Full documentation — including Docker deployment, cloud engines, development setup, and tutorials — at **[open-jarvis.github.io/OpenJarvis](https://open-jarvis.github.io/OpenJarvis/)**.
-
-## Community
-
-- **GitHub:** [github.com/open-jarvis/OpenJarvis](https://github.com/open-jarvis/OpenJarvis)
-- **Discord:** [discord.gg/CMVBmDQ5Fj](https://discord.gg/CMVBmDQ5Fj)
-- **X / Twitter:** [@OpenJarvisAI](https://x.com/OpenJarvisAI)
-- **Docs:** [open-jarvis.github.io/OpenJarvis](https://open-jarvis.github.io/OpenJarvis/)
-
-## Contributing
-
-We welcome contributions! See the [Contributing Guide](CONTRIBUTING.md) for incentives, contribution types, and the PR process.
-
-Quick start for contributors:
-
-```bash
-git clone https://github.com/open-jarvis/OpenJarvis.git
-cd OpenJarvis
-uv sync --extra dev
-uv run pre-commit install
-uv run pytest tests/ -v
-```
-
-Browse the [Roadmap](https://open-jarvis.github.io/OpenJarvis/development/roadmap/) for areas where help is needed. Comment **"take"** on any issue to get auto-assigned.
-
-## About
-
-OpenJarvis is part of [Intelligence Per Watt](https://www.intelligence-per-watt.ai/), a research initiative studying the intelligence efficiency of AI systems. The project is developed at [Hazy Research](https://hazyresearch.stanford.edu/) and the [Scaling Intelligence Lab](https://scalingintelligence.stanford.edu/) at [Stanford SAIL](https://ai.stanford.edu/).
-
-## Sponsors
-
-<p>
-  <a href="https://www.laude.org/">Laude Institute</a> &bull;
-  <a href="https://datascience.stanford.edu/marlowe">Stanford Marlowe</a> &bull;
-  <a href="https://cloud.google.com/">Google Cloud Platform</a> &bull;
-  <a href="https://lambda.ai/">Lambda Labs</a> &bull;
-  <a href="https://ollama.com/">Ollama</a> &bull;
-  <a href="https://research.ibm.com/">IBM Research</a> &bull;
-  <a href="https://hai.stanford.edu/">Stanford HAI</a>
-</p>
-
-## Citation
 ```bibtex
 @misc{saadfalcon2026openjarvispersonalaipersonal,
       title={OpenJarvis: Personal AI, On Personal Devices}, 
@@ -178,6 +112,8 @@ OpenJarvis is part of [Intelligence Per Watt](https://www.intelligence-per-watt.
       url={https://arxiv.org/abs/2605.17172}, 
 }
 ```
+
+</details>
 
 ## License
 

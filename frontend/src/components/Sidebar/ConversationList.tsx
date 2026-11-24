@@ -50,9 +50,10 @@ export function ConversationList({ searchQuery }: Props) {
         return (
           <div
             key={conv.id}
-            className="group flex items-center rounded-lg cursor-pointer transition-colors"
+            className="group flex items-center rounded-md cursor-pointer transition-colors"
             style={{
               background: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
+              border: isActive ? '1px solid var(--color-border)' : '1px solid transparent',
             }}
             onMouseEnter={(e) => {
               if (!isActive) e.currentTarget.style.background = 'var(--color-bg-secondary)';
@@ -66,10 +67,10 @@ export function ConversationList({ searchQuery }: Props) {
                 selectConversation(conv.id);
                 navigate('/');
               }}
-              className="flex-1 text-left px-3 py-2 min-w-0 cursor-pointer"
+              className="flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer"
             >
               <div
-                className="text-sm truncate"
+                className="text-[13px] truncate"
                 style={{
                   color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
                   fontWeight: isActive ? 500 : 400,
@@ -77,7 +78,7 @@ export function ConversationList({ searchQuery }: Props) {
               >
                 {conv.title}
               </div>
-              <div className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="text-[10px] mt-0.5 hw-mono" style={{ color: 'var(--color-text-tertiary)' }}>
                 {formatRelativeTime(conv.updatedAt)}
               </div>
             </button>
@@ -99,7 +100,7 @@ export function ConversationList({ searchQuery }: Props) {
                   : 'Delete conversation'
               }
             >
-              <Trash2 size={14} />
+              <Trash2 size={13} />
             </button>
           </div>
         );
