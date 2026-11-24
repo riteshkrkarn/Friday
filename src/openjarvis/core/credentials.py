@@ -204,12 +204,42 @@ def get_credential_status(tool_name: str) -> dict[str, bool]:
 
 
 def inject_credentials(path: Path | None = None) -> None:
-    """Load credentials.toml and inject into os.environ. Call at server startup."""
+    """Load credentials.toml, cloud-keys.env, and local .env into os.environ."""
+    # 1. First inject from ~/.openjarvis/credentials.toml
     creds = load_credentials(path=path)
     for _tool, kvs in creds.items():
         for k, v in kvs.items():
             if k not in os.environ:
                 os.environ[k] = v
+
+    # 2. Inject from ~/.openjarvis/cloud-keys.env
+    cloud_env = get_config_dir() / "cloud-keys.env"
+    if cloud_env.exists():
+        try:
+            for raw in cloud_env.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    k, v = k.strip(), v.strip().strip("'\"")
+                    if k and k not in os.environ:
+                        os.environ[k] = v
+        except Exception:
+            pass
+
+    # 3. Inject from workspace .env or current directory .env
+    for candidate in (Path(".env"), Path.cwd() / ".env"):
+        if candidate.exists():
+            try:
+                for raw in candidate.read_text(encoding="utf-8").splitlines():
+                    line = raw.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k, v = k.strip(), v.strip().strip("'\"")
+                        if k and k not in os.environ:
+                            os.environ[k] = v
+                break
+            except Exception:
+                pass
 
 
 def get_tool_credential(

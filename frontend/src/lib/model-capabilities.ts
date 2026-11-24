@@ -17,6 +17,9 @@ export function isEmbedOnlyModel(modelId: string): boolean {
   return (
     leaf.includes('embed') ||
     leaf.includes('minilm') ||
+    leaf.includes('starcoder') ||
+    leaf.includes('rerank') ||
+    leaf.includes('reward') ||
     EMBEDDING_MODEL_PREFIXES.some((prefix) => leaf.startsWith(prefix))
   );
 }

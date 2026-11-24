@@ -31,6 +31,7 @@ _MINIMAX_PREFIXES = ("MiniMax-",)
 # their routing prefix before the generic '"/" means OpenRouter' fallback
 # below — otherwise "atlascloud/openai/gpt-4.1-mini" is sent to OpenRouter.
 _ATLASCLOUD_PREFIX = "atlascloud/"
+_GROQ_PREFIXES = ("groq/", "groq-")
 
 # HuggingFace orgs that host local-only quantised models — never route to cloud.
 _LOCAL_HF_ORGS = (
@@ -66,6 +67,7 @@ def _load_keys() -> dict[str, str]:
         "OPENROUTER_API_KEY",
         "MINIMAX_API_KEY",
         "ATLASCLOUD_API_KEY",
+        "GROQ_API_KEY",
     ):
         val = os.environ.get(name)
         if val:
@@ -89,6 +91,8 @@ def get_provider(model: str) -> str | None:
         return "minimax"
     if model.startswith(_ATLASCLOUD_PREFIX):
         return "atlascloud"
+    if any(model.startswith(p) for p in _GROQ_PREFIXES):
+        return "groq"
     if any(model.startswith(org) for org in _LOCAL_HF_ORGS):
         return None  # local model, never route to cloud
     if "/" in model:  # openrouter format: "meta-llama/llama-3-8b"
@@ -204,7 +208,9 @@ async def _stream_openai(
                     break
                 try:
                     chunk = json.loads(data)
-                    delta = chunk["choices"][0]["delta"].get("content") or ""
+                    choice = chunk.get("choices", [{}])[0]
+                    delta_dict = choice.get("delta", {})
+                    delta = delta_dict.get("content") or delta_dict.get("reasoning_content") or ""
                     if delta:
                         yield delta
                 except Exception:
@@ -437,6 +443,26 @@ async def stream_cloud(
             max_tokens,
             base_url="https://api.minimax.io/v1",
             api_key_name="MINIMAX_API_KEY",
+        ):
+            yield token
+
+    elif provider == "groq":
+        keys = _load_keys()
+        api_key = keys.get("GROQ_API_KEY", "")
+        if not api_key:
+            raise ValueError("GROQ_API_KEY not set — add it in your .env")
+        model_id = model
+        for p in _GROQ_PREFIXES:
+            if model_id.startswith(p):
+                model_id = model_id[len(p) :]
+                break
+        async for token in _stream_openai(
+            model_id,
+            messages,
+            temperature,
+            max_tokens,
+            base_url="https://api.groq.com/openai/v1",
+            api_key_name="GROQ_API_KEY",
         ):
             yield token
 

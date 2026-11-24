@@ -1,20 +1,69 @@
-# OpenJarvis configuration — GLM-4.7-Flash eval on 8x A100-80GB
+# OpenJarvis configuration — Cloud & Local inference (NVIDIA NIM & Groq)
 
 # ═══════════════════════════════════════════════════════════════
 # PILLAR 1: Intelligence — The Model
 # ═══════════════════════════════════════════════════════════════
 [intelligence]
-default_model = "zai-org/GLM-4.7-Flash"   # HuggingFace model ID
-fallback_model = "glm-4.7-flash"          # Catalog alias fallback
-preferred_engine = "vllm"                 # MoE model, vLLM is best for A100s
-provider = "local"                        # Running locally on this machine
-quantization = "none"                     # Full precision, we have 640GB VRAM
-# Generation defaults for eval
-temperature = 0.0                         # Deterministic for reproducibility
-max_tokens = 2048                         # Standard eval output length
+default_model = "nvidia/nemotron-3-ultra-550b-a55b"
+fallback_model = "groq/openai/gpt-oss-120b"
+preferred_engine = "nim"
+provider = "nvidia"
+temperature = 0.7
+max_tokens = 2048
 top_p = 0.9
 top_k = 40
 repetition_penalty = 1.0
+
+# Ranked Fallback Chain (Tier 1 Flagship -> Tier 2 Balanced -> Tier 3 Fast)
+[[intelligence.fallbacks]]
+model = "nvidia/nemotron-3-ultra-550b-a55b"
+engine = "nim"
+provider = "nvidia"
+
+[[intelligence.fallbacks]]
+model = "groq/openai/gpt-oss-120b"
+engine = "cloud"
+provider = "groq"
+
+[[intelligence.fallbacks]]
+model = "minimaxai/minimax-m3.1-flash"
+engine = "nim"
+provider = "nvidia"
+
+[[intelligence.fallbacks]]
+model = "meta/muse-glimmer-30b"
+engine = "nim"
+provider = "nvidia"
+
+[[intelligence.fallbacks]]
+model = "nvidia/nemotron-3.5-super-vl-120b-a12b"
+engine = "nim"
+provider = "nvidia"
+
+[[intelligence.fallbacks]]
+model = "groq/qwen/qwen3.8-27b"
+engine = "cloud"
+provider = "groq"
+
+[[intelligence.fallbacks]]
+model = "nvidia/nemotron-3.5-bolt-e4b"
+engine = "nim"
+provider = "nvidia"
+
+[[intelligence.fallbacks]]
+model = "nvidia/nemotron-3.5-lightning-30b-a3b"
+engine = "nim"
+provider = "nvidia"
+
+[[intelligence.fallbacks]]
+model = "groq/openai/gpt-oss-20b"
+engine = "cloud"
+provider = "groq"
+
+[[intelligence.fallbacks]]
+model = "groq/allam-2-7b"
+engine = "cloud"
+provider = "groq"
 
 # ═══════════════════════════════════════════════════════════════
 # PILLAR 2: Agent — The Agentic Harness
@@ -40,7 +89,7 @@ enabled = true
 # PILLAR 4: Engine — The Inference Runtime
 # ═══════════════════════════════════════════════════════════════
 [engine]
-default = "vllm"
+default = "nim"
 
 [engine.vllm]
 host = "http://localhost:8001"            # vLLM serving port

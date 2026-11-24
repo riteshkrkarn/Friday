@@ -50,7 +50,16 @@ class MultiEngine(InferenceEngine):
         self._model_map = model_map
         self._model_key_map = key_map
 
-    _CLOUD_PREFIXES = ("gpt-", "o1-", "o3-", "o4-", "claude-", "gemini-", "openrouter/")
+    _CLOUD_PREFIXES = (
+        "gpt-",
+        "o1-",
+        "o3-",
+        "o4-",
+        "claude-",
+        "gemini-",
+        "openrouter/",
+        "groq/",
+    )
 
     def _engine_for(self, model: str) -> InferenceEngine:
         """Find the engine that owns a model, refreshing the map once if needed."""

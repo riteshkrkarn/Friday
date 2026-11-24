@@ -27,6 +27,9 @@ def is_embed_only_model(model_name: str) -> bool:
     return (
         "embed" in leaf
         or "minilm" in leaf
+        or "starcoder" in leaf
+        or "rerank" in leaf
+        or "reward" in leaf
         or leaf.startswith(_EMBEDDING_MODEL_PREFIXES)
     )
 

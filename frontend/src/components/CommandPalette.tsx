@@ -36,6 +36,32 @@ interface CloudProvider {
 
 const CLOUD_PROVIDERS: CloudProvider[] = [
   {
+    name: 'NVIDIA NIM (Free Hosted)',
+    envKey: 'NIM_API_KEY',
+    models: [
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b', desc: 'Nemotron 3 Ultra 550B — Flagship frontier reasoning' },
+      { id: 'nvidia/nemotron-3.5-super-vl-120b-a12b', desc: 'Nemotron 3.5 Super VL 120B — High-capacity vision-language' },
+      { id: 'minimaxai/minimax-m3.1-flash', desc: 'MiniMax M3.1 Flash — High-speed conversational & agentic (Intel 29)' },
+      { id: 'meta/muse-glimmer-30b', desc: 'Muse Glimmer 30B — Multimodal reasoning with native tool calling' },
+      { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', desc: 'Nemotron 3.5 Lightning 30B — Fast MoE architecture' },
+      { id: 'nvidia/nemotron-3.5-bolt-e4b', desc: 'Nemotron 3.5 Bolt E4B — Compact reasoning & agentic chat' },
+      { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', desc: 'Nemotron 3 Nano 30B — Omni chain-of-thought reasoning' },
+      { id: 'moonshotai/kimi-k3.1-pro', desc: 'Kimi K3.1 Pro — 3T-class 1M context agentic model (Intel 46)' },
+      { id: 'z-ai/glm-5.3-flash', desc: 'GLM 5.3 Flash — Multimodal MoE with MLA attention (Intel 28)' },
+      { id: 'mistralai/mistral-large-4-1t-a52b', desc: 'Mistral Large 4 — 1T/52B-active MoE reasoning (Intel 26)' },
+    ],
+  },
+  {
+    name: 'Groq (Free Ultra-Fast)',
+    envKey: 'GROQ_API_KEY',
+    models: [
+      { id: 'groq/openai/gpt-oss-120b', desc: 'GPT-OSS 120B — Flagship open reasoning on Groq' },
+      { id: 'groq/qwen/qwen3.8-27b', desc: 'Qwen 3.8 27B — Multimodal & deep reasoning' },
+      { id: 'groq/openai/gpt-oss-20b', desc: 'GPT-OSS 20B — Hyper-fast (~1000 tps) reasoning' },
+      { id: 'groq/allam-2-7b', desc: 'Allam 2 7B — Ultra-lightweight conversational' },
+    ],
+  },
+  {
     name: 'OpenAI',
     envKey: 'OPENAI_API_KEY',
     models: [
@@ -523,15 +549,14 @@ export function CommandPalette() {
                       )}
                     </div>
 
-                    {/* Models for this provider (only show if key is set) */}
-                    {hasKey && (
-                      <div className="ml-5 flex flex-col gap-1">
-                        {provider.models.map((model) => {
-                          const isActive = model.id === selectedModel;
-                          return (
-                            <button
-                              key={model.id}
-                              onClick={() => handleSelect(model.id)}
+                    {/* Models for this provider */}
+                    <div className="ml-5 flex flex-col gap-1">
+                      {provider.models.map((model) => {
+                        const isActive = model.id === selectedModel;
+                        return (
+                          <button
+                            key={model.id}
+                            onClick={() => handleSelect(model.id)}
                               className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left cursor-pointer transition-colors"
                               style={{ background: isActive ? 'var(--color-accent-subtle)' : 'transparent' }}
                               onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-secondary)'; }}
@@ -555,7 +580,6 @@ export function CommandPalette() {
                           );
                         })}
                       </div>
-                    )}
                   </div>
                 );
               })}

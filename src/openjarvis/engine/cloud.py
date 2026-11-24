@@ -190,6 +190,10 @@ def _is_anthropic_model(model: str) -> bool:
     )
 
 
+def _is_groq_model(model: str) -> bool:
+    return model.startswith(("groq/", "groq-"))
+
+
 def _is_google_model(model: str) -> bool:
     return (
         "gemini" in model.lower()
@@ -425,6 +429,7 @@ class CloudEngine(InferenceEngine):
         self._minimax_client: Any = None
         self._deepseek_client: Any = None
         self._codex_client: Any = None
+        self._groq_client: Any = None
         # Gemini thought_signatures: tool_call_id -> signature bytes
         self._thought_sigs: Dict[str, bytes] = {}
         self._init_clients()
@@ -495,6 +500,17 @@ class CloudEngine(InferenceEngine):
                 self._deepseek_client = openai.OpenAI(
                     base_url="https://api.deepseek.com/v1",
                     api_key=deepseek_key,
+                )
+            except ImportError:
+                pass
+        groq_key = os.environ.get("GROQ_API_KEY")
+        if groq_key:
+            try:
+                import openai
+
+                self._groq_client = openai.OpenAI(
+                    base_url="https://api.groq.com/openai/v1",
+                    api_key=groq_key,
                 )
             except ImportError:
                 pass
@@ -745,6 +761,68 @@ class CloudEngine(InferenceEngine):
             ]
 
         return result
+
+    def _generate_groq(
+        self,
+        messages: Sequence[Message],
+        *,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        if self._groq_client is None:
+            raise EngineConnectionError(
+                "Groq client not available — set GROQ_API_KEY in .env"
+            )
+        actual_model = model
+        for p in ("groq/", "groq-"):
+            if actual_model.startswith(p):
+                actual_model = actual_model[len(p) :]
+                break
+
+        create_kwargs: Dict[str, Any] = {
+            "model": actual_model,
+            "messages": messages_to_dicts(messages),
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            **kwargs,
+        }
+        t0 = time.monotonic()
+        resp = self._groq_client.chat.completions.create(**create_kwargs)
+        elapsed = time.monotonic() - t0
+        choice = resp.choices[0]
+        usage = resp.usage
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
+        msg = choice.message
+        content = getattr(msg, "content", "") or getattr(msg, "reasoning_content", "") or ""
+        result = {
+            "content": content,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": (usage.total_tokens if usage else 0),
+            },
+            "model": resp.model,
+            "finish_reason": choice.finish_reason or "stop",
+            "cost_usd": 0.0,
+            "ttft": elapsed,
+        }
+        return result
+
+    async def _stream_groq(
+        self,
+        messages: Sequence[Message],
+        *,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        from openjarvis.server.cloud_router import stream_cloud
+        async for token in stream_cloud(model, messages, temperature, max_tokens):
+            yield token
 
     def _generate_anthropic(
         self,
@@ -1297,6 +1375,8 @@ class CloudEngine(InferenceEngine):
             return self._generate_deepseek(messages, **kw)
         if _is_anthropic_model(model):
             return self._generate_anthropic(messages, **kw)
+        if _is_groq_model(model):
+            return self._generate_groq(messages, **kw)
         if _is_google_model(model):
             return self._generate_google(messages, **kw)
         return self._generate_openai(messages, **kw)
@@ -1333,6 +1413,9 @@ class CloudEngine(InferenceEngine):
                 yield token
         elif _is_anthropic_model(model):
             async for token in self._stream_anthropic(messages, **kw):
+                yield token
+        elif _is_groq_model(model):
+            async for token in self._stream_groq(messages, **kw):
                 yield token
         elif _is_google_model(model):
             async for token in self._stream_google(messages, **kw):
@@ -2049,6 +2132,8 @@ class CloudEngine(InferenceEngine):
             return self._deepseek_client
         if _is_anthropic_model(model):
             return self._anthropic_client
+        if _is_groq_model(model):
+            return self._groq_client
         if _is_google_model(model):
             return self._google_client
         if _is_openai_model(model):

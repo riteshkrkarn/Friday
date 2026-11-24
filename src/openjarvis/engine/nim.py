@@ -122,8 +122,10 @@ class NIMEngine(InferenceEngine):
         estimated_prompt = estimate_prompt_tokens(messages)
         prompt_tokens = max(reported_prompt, estimated_prompt)
         completion_tokens = usage.get("completion_tokens", 0)
+        msg = choice.get("message", {})
+        content = msg.get("content") or msg.get("reasoning_content") or ""
         result: Dict[str, Any] = {
-            "content": choice["message"].get("content") or "",
+            "content": content,
             "usage": {
                 "prompt_tokens": prompt_tokens,
                 "prompt_tokens_evaluated": reported_prompt or prompt_tokens,
@@ -187,7 +189,7 @@ class NIMEngine(InferenceEngine):
                         if not choices:
                             continue
                         delta = choices[0].get("delta", {})
-                        content = delta.get("content")
+                        content = delta.get("content") or delta.get("reasoning_content")
                         if content:
                             yield content
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
@@ -247,7 +249,7 @@ class NIMEngine(InferenceEngine):
                         choice = choices[0]
                         delta = choice.get("delta", {})
                         finish = choice.get("finish_reason")
-                        content = delta.get("content")
+                        content = delta.get("content") or delta.get("reasoning_content")
                         tool_calls = delta.get("tool_calls")
                         usage = chunk.get("usage")
 

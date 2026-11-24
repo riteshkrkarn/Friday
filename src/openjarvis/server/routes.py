@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import uuid
 import weakref
@@ -1192,6 +1193,37 @@ async def list_models(request: Request) -> ModelListResponse:
     # memory/retrieval via the embedder path; putting them in /v1/models made
     # the UI auto-select nomic-embed-text and fail every generation with 400.
     model_ids = [m for m in model_ids if not is_embed_only_model(m)]
+
+    # Include available free-tier cloud models if their API keys are configured
+    from openjarvis.server.cloud_router import _load_keys
+    available_keys = _load_keys()
+    if available_keys.get("GROQ_API_KEY"):
+        groq_models = [
+            "groq/openai/gpt-oss-120b",
+            "groq/qwen/qwen3.8-27b",
+            "groq/openai/gpt-oss-20b",
+            "groq/allam-2-7b",
+        ]
+        for gm in groq_models:
+            if gm not in model_ids:
+                model_ids.append(gm)
+
+    if available_keys.get("NIM_API_KEY") or available_keys.get("NVIDIA_API_KEY") or os.environ.get("NIM_API_KEY") or os.environ.get("NVIDIA_API_KEY"):
+        nim_curated = [
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            "nvidia/nemotron-3.5-super-vl-120b-a12b",
+            "minimaxai/minimax-m3.1-flash",
+            "meta/muse-glimmer-30b",
+            "nvidia/nemotron-3.5-lightning-30b-a3b",
+            "nvidia/nemotron-3.5-bolt-e4b",
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            "moonshotai/kimi-k3.1-pro",
+            "z-ai/glm-5.3-flash",
+            "mistralai/mistral-large-4-1t-a52b",
+        ]
+        priority_models = [m for m in nim_curated if m in model_ids]
+        other_models = [m for m in model_ids if m not in nim_curated]
+        model_ids = priority_models + other_models
 
     # Put the server's configured model first. The web UI auto-selects
     # chatModels[0] when it has no stored preference, so without this the
