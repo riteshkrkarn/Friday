@@ -114,10 +114,11 @@ export function Sidebar() {
                 aria-hidden="true"
               >
                 <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2" />
-                <circle cx="12" cy="12" r="3" fill="var(--color-accent)" stroke="none" />
+                <circle cx="12" cy="12" r="4.8" />
+                <circle cx="12" cy="12" r="2.3" fill="var(--color-accent)" stroke="none" />
               </svg>
               <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                OpenJarvis
+                Second Me
               </span>
             </button>
 

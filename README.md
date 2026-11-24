@@ -1,5 +1,5 @@
 <div align="center">
-  <img alt="OpenJarvis" src="assets/OpenJarvis_Horizontal_Logo.png" width="360">
+  <img alt="Second Me" src="assets/SecondMe_Horizontal_Logo.jpg" width="420">
 
   <h1>Second Me</h1>
   <p><i>A personal AI assistant built on top of <a href="https://github.com/open-jarvis/OpenJarvis">OpenJarvis</a> (Apache 2.0).</i></p>
