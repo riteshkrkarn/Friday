@@ -25,13 +25,14 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'OpenJarvis',
-        short_name: 'Jarvis',
-        description: 'On-device AI assistant',
-        theme_color: '#161618',
-        background_color: '#161618',
+        name: 'Second Me',
+        short_name: 'Second Me',
+        description: 'Personal AI assistant built on OpenJarvis',
+        theme_color: '#121214',
+        background_color: '#121214',
         display: 'standalone',
         icons: [
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' },
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
         ],
