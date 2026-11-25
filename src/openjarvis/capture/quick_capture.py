@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Dict, Optional
 
+from openjarvis.core.friday_prompts import load_prompt
 from openjarvis.core.types import Message, Role
 from openjarvis.tools.item_store import ITEM_TYPES, Item, ItemStore
 
@@ -199,14 +200,20 @@ def extract_item_fields(
 
     if engine is not None and model:
         ref_day = (today or date.today()).isoformat()
-        prompt = (
-            f"Today is {ref_day}. Extract a personal item from the user's note.\n"
-            "Return ONLY a JSON object with keys:\n"
-            '- "title": short concise title (string)\n'
-            f'- "item_type": one of {list(ITEM_TYPES)}\n'
-            '- "due_date": "YYYY-MM-DD" or null\n'
-            '- "notes": extra details or ""\n\n'
-            f"Note: {clean}"
+        prompt = load_prompt(
+            "capture_extract",
+            fallback=(
+                "Today is {today}. Extract a personal item from the user's note.\n"
+                "Return ONLY a JSON object with keys:\n"
+                '- "title": short concise title (string)\n'
+                '- "item_type": one of {item_types}\n'
+                '- "due_date": "YYYY-MM-DD" or null\n'
+                '- "notes": extra details or ""\n\n'
+                "Note: {note}"
+            ),
+            today=ref_day,
+            item_types=list(ITEM_TYPES),
+            note=clean,
         )
         try:
             resp = engine.generate(

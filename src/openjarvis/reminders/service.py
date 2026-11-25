@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from openjarvis.core.friday_prompts import load_prompt
 from openjarvis.core.paths import get_config_dir
 from openjarvis.tools.item_store import Item, ItemStore
 
@@ -309,9 +310,13 @@ def register_reminder_jobs(
             return task.id
 
     task = scheduler.create_task(
-        prompt=(
-            f"Run daily Friday deadline (within {within_days} days) and "
-            "resume/portfolio update reminders."
+        prompt=load_prompt(
+            "daily_reminders",
+            fallback=(
+                "Run daily Friday deadline (within {within_days} days) and "
+                "resume/portfolio update reminders."
+            ),
+            within_days=within_days,
         ),
         schedule_type="cron",
         schedule_value=cron_expr,

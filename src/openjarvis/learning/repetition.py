@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from openjarvis.core.friday_prompts import load_prompt
 from openjarvis.core.paths import get_config_dir
 
 DEFAULT_REPEAT_THRESHOLD = 3
@@ -178,9 +179,15 @@ class RepetitionStore:
             return None
 
         when = f" on {weekday}" if weekday else ""
-        proposal = (
-            f"You often {clean_label}{when} ({count} times). "
-            "Want to set up a reminder or shortcut for this?"
+        proposal = load_prompt(
+            "repetition_proposal",
+            fallback=(
+                "You often {label}{when} ({count} times). "
+                "Want to set up a reminder or shortcut for this?"
+            ),
+            label=clean_label,
+            when=when,
+            count=count,
         )
         rule = ProposedRule(
             id=uuid.uuid4().hex[:12],

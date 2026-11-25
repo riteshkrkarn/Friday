@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from openjarvis.core.friday_prompts import load_prompt
 from openjarvis.core.paths import get_config_dir
 from openjarvis.core.types import Message, Role
 from openjarvis.tools.item_store import Item, ItemStore
@@ -316,10 +317,14 @@ def generate_morning_brief(
     final_text = template_text
 
     if engine is not None and model:
-        prompt = (
-            "Write a concise, personalized morning briefing using ONLY the data below. "
-            "Keep the exact section priority order. Do not invent items.\n\n"
-            f"{template_text}"
+        prompt = load_prompt(
+            "morning_brief",
+            fallback=(
+                "Write a concise, personalized morning briefing for Friday using ONLY "
+                "the data below. Keep the exact section priority order. Do not invent items.\n\n"
+                "{template_text}"
+            ),
+            template_text=template_text,
         )
         try:
             resp = engine.generate(
