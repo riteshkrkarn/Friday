@@ -1,4 +1,4 @@
-"""Second Me daily deadline and resume/portfolio update reminders."""
+"""Friday daily deadline and resume/portfolio update reminders."""
 
 from openjarvis.reminders.service import (
     DEFAULT_REMINDER_EMAIL,

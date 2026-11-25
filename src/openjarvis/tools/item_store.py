@@ -1,4 +1,4 @@
-"""ItemStore — SQLite-backed store for Second Me personal items.
+"""ItemStore — SQLite-backed store for Friday personal items.
 
 Tracks hackathons, projects, tasks, and achievements with deadlines,
 status, notes, and resume/portfolio update flags.
@@ -36,7 +36,7 @@ def _validate_choice(value: str, allowed: tuple[str, ...], label: str) -> str:
 
 @dataclass
 class Item:
-    """A tracked Second Me item (hackathon, project, task, or achievement)."""
+    """A tracked Friday item (hackathon, project, task, or achievement)."""
 
     id: str
     title: str
@@ -88,7 +88,7 @@ class Item:
 
 
 class ItemStore:
-    """SQLite store for Second Me hackathons, projects, tasks, and achievements."""
+    """SQLite store for Friday hackathons, projects, tasks, and achievements."""
 
     def __init__(self, db_path: str = "") -> None:
         if not db_path:

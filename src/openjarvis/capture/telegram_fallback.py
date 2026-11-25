@@ -1,4 +1,4 @@
-"""Telegram fallback handler for Second Me quick capture."""
+"""Telegram fallback handler for Friday quick capture."""
 
 from __future__ import annotations
 

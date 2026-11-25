@@ -114,11 +114,12 @@ export function Sidebar() {
                 aria-hidden="true"
               >
                 <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2" />
-                <circle cx="12" cy="12" r="4.8" />
-                <circle cx="12" cy="12" r="2.3" fill="var(--color-accent)" stroke="none" />
+                <path d="M9.5 16.5V8h6" />
+                <path d="M9.5 12h4.2" />
+                <circle cx="15.5" cy="12" r="1.6" fill="var(--color-accent)" stroke="none" />
               </svg>
               <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                Second Me
+                Friday
               </span>
             </button>
 

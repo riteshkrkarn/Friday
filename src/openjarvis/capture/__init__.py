@@ -1,4 +1,4 @@
-"""Second Me quick capture package (voice hotkey, STT, extraction, Telegram fallback)."""
+"""Friday quick capture package (voice hotkey, STT, extraction, Telegram fallback)."""
 
 from openjarvis.capture.quick_capture import (
     CaptureResult,

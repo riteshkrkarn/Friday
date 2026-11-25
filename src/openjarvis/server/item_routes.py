@@ -1,4 +1,4 @@
-"""Item routes — CRUD and search endpoints for Second Me personal items."""
+"""Item routes — CRUD and search endpoints for Friday personal items."""
 
 from __future__ import annotations
 

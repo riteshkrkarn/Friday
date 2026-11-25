@@ -1,4 +1,4 @@
-"""Second Me repetition tracking and confirmation-gated rule learning."""
+"""Friday repetition tracking and confirmation-gated rule learning."""
 
 from openjarvis.learning.repetition import (
     DEFAULT_REPEAT_THRESHOLD,

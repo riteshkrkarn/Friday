@@ -32,7 +32,7 @@ def test_add_get_update_delete_roundtrip(store):
         "AI Agents Hackathon",
         "hackathon",
         due_date="2026-12-01",
-        notes="Build Second Me prototype",
+        notes="Build Friday prototype",
     )
     assert item.id
     assert item.title == "AI Agents Hackathon"
@@ -82,12 +82,12 @@ def test_list_filters_search_and_upcoming_deadlines(store):
     store.add_item("Due Soon Hack", "hackathon", due_date=(today + timedelta(days=2)).isoformat())
     store.add_item("Later Task", "task", due_date=(today + timedelta(days=20)).isoformat(), notes="refactor")
     store.add_item("Done Task", "task", due_date=(today + timedelta(days=1)).isoformat(), status="done")
-    store.add_item("No Date Project", "project", notes="Second Me UI")
+    store.add_item("No Date Project", "project", notes="Friday UI")
 
     hacks = store.list_items(item_type="hackathon")
     assert [i.title for i in hacks] == ["Due Soon Hack"]
 
-    search_hits = store.list_items(query="second me")
+    search_hits = store.list_items(query="friday")
     assert [i.title for i in search_hits] == ["No Date Project"]
 
     due_window = store.list_items(due_before=(today + timedelta(days=5)).isoformat(), status="open")

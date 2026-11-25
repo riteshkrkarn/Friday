@@ -1,4 +1,4 @@
-"""Tests for Second Me quick capture (STT fallback, extractor, hotkey, Telegram, API)."""
+"""Tests for Friday quick capture (STT fallback, extractor, hotkey, Telegram, API)."""
 
 from __future__ import annotations
 
@@ -202,7 +202,7 @@ def test_capture_text_route(tmp_path, monkeypatch):
 
     resp = client.post(
         "/v1/items/capture",
-        json={"text": "Build Second Me project due 2026-12-01"},
+        json={"text": "Build Friday project due 2026-12-01"},
     )
     assert resp.status_code == 201
     data = resp.json()

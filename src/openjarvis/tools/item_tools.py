@@ -1,4 +1,4 @@
-"""Agent tool for managing Second Me items in ItemStore."""
+"""Agent tool for managing Friday items in ItemStore."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class ItemStoreTool(BaseTool):
         return ToolSpec(
             name="item_store",
             description=(
-                "Manage Second Me personal items (hackathons, projects, tasks, "
+                "Manage Friday personal items (hackathons, projects, tasks, "
                 "achievements): add, get, update, delete, list/search, check "
                 "upcoming deadlines, or list pending resume/portfolio updates."
             ),

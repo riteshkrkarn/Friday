@@ -1,4 +1,4 @@
-# Second Me: Product Plan
+# Friday: Product Plan
 
 ## Goal
 A personal assistant that sits beside you. It remembers your projects, hackathons, deadlines, and achievements. It reminds you about what is due, what needs updating, and what you keep repeating.

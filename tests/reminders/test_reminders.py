@@ -1,4 +1,4 @@
-"""Tests for Second Me daily reminders, ordered delivery, scheduler, and API."""
+"""Tests for Friday daily reminders, ordered delivery, scheduler, and API."""
 
 from __future__ import annotations
 

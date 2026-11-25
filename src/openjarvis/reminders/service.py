@@ -148,7 +148,7 @@ def build_reminder_digest(
             upcoming=[],
             overdue=[],
             pending_updates=[],
-            subject="Second Me: All clear",
+            subject="Friday: All clear",
             body="No upcoming deadlines or pending resume/portfolio updates.",
         )
 
@@ -173,7 +173,7 @@ def build_reminder_digest(
         parts.append(f"{len(upcoming)} upcoming")
     if pending_updates:
         parts.append(f"{len(pending_updates)} update(s)")
-    subject = f"Second Me Reminders: {', '.join(parts)}"
+    subject = f"Friday Reminders: {', '.join(parts)}"
 
     return ReminderDigest(
         upcoming=upcoming,
@@ -302,7 +302,7 @@ def register_reminder_jobs(
     cron_expr: str = "0 8 * * *",
     within_days: int = 2,
 ) -> str:
-    """Register the daily Second Me reminder & update-reminder cron job."""
+    """Register the daily Friday reminder & update-reminder cron job."""
     existing = scheduler.list_tasks()
     for task in existing:
         if task.metadata.get("second_me_job") == "daily_reminders":
@@ -310,7 +310,7 @@ def register_reminder_jobs(
 
     task = scheduler.create_task(
         prompt=(
-            f"Run daily Second Me deadline (within {within_days} days) and "
+            f"Run daily Friday deadline (within {within_days} days) and "
             "resume/portfolio update reminders."
         ),
         schedule_type="cron",

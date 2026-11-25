@@ -35,7 +35,7 @@ def test_morning_brief_priority_order_and_preferences(stores):
     item_store.add_item("Submit Hack Demo", "hackathon", due_date="2026-11-25")
     item_store.add_item("Won Best AI Tool", "achievement")
     item_store.add_item("Write Unit Tests", "task")
-    item_store.add_item("Second Me UI", "project", status="in_progress")
+    item_store.add_item("Friday UI", "project", status="in_progress")
 
     brief = generate_morning_brief(item_store, prefs_store, today=today)
     assert list(brief.sections.keys()) == DEFAULT_BRIEF_SECTIONS

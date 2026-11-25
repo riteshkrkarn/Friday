@@ -1,4 +1,4 @@
-"""Windows double-tap hotkey listener for Second Me quick voice capture."""
+"""Windows double-tap hotkey listener for Friday quick voice capture."""
 
 from __future__ import annotations
 

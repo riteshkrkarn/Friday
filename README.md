@@ -1,7 +1,7 @@
 <div align="center">
-  <img alt="Second Me" src="assets/SecondMe_Horizontal_Logo.jpg" width="420">
+  <img alt="Friday" src="assets/Friday_Horizontal_Logo.jpg" width="420">
 
-  <h1>Second Me</h1>
+  <h1>Friday</h1>
   <p><i>A personal AI assistant built on top of <a href="https://github.com/open-jarvis/OpenJarvis">OpenJarvis</a> (Apache 2.0).</i></p>
 
   <p>
@@ -16,7 +16,7 @@
 
 ## Overview
 
-**Second Me** is a personal assistant designed to sit beside you throughout your daily workflow on Windows. Built on the OpenJarvis agentic runtime and trace/memory primitives, it is tailored to remember your **projects, hackathons, deadlines, and achievements**, surface timely reminders, generate personalized briefings, and learn from your repeated habits.
+**Friday** is a personal assistant designed to sit beside you throughout your daily workflow on Windows. Built on the OpenJarvis agentic runtime and trace/memory primitives, it is tailored to remember your **projects, hackathons, deadlines, and achievements**, surface timely reminders, generate personalized briefings, and learn from your repeated habits.
 
 ---
 
@@ -59,7 +59,7 @@ Open `http://localhost:5173` in your browser (or run `npm run build` to bundle i
 
 ### 4. Run Tests
 ```powershell
-# Second Me backend unit tests (offline, mocked)
+# Friday backend unit tests (offline, mocked)
 $env:PYTHONPATH="src;.venv\Lib\site-packages"; pytest tests/server/test_cloud_key_setup.py tests/tools/test_item_store.py tests/capture/test_quick_capture.py tests/reminders/test_reminders.py tests/reports/test_morning_brief.py tests/learning/test_repetition.py -q
 
 # Live cloud endpoint tests (requires network + .env keys)

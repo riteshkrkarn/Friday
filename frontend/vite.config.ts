@@ -25,8 +25,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Second Me',
-        short_name: 'Second Me',
+        name: 'Friday',
+        short_name: 'Friday',
         description: 'Personal AI assistant built on OpenJarvis',
         theme_color: '#121214',
         background_color: '#121214',
