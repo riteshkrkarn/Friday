@@ -35,25 +35,25 @@ export function LogsPage() {
         <header className="mb-5 pb-4 shrink-0" style={{ borderBottom: '1px solid var(--color-border)' }}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="hw-led" style={{ background: 'var(--color-success)' }} />
-              <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                Logs
+              <span className="studio-dot" style={{ background: 'var(--color-success)' }} />
+              <h1 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+                Activity Logs
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs hw-mono" style={{ color: 'var(--color-text-tertiary)' }}>
+              <span className="text-xs studio-mono" style={{ color: 'var(--color-text-tertiary)' }}>
                 {logEntries.length} entries
               </span>
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                 style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
               >
                 <Copy size={12} /> Copy All
               </button>
               <button
                 onClick={clearLogs}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
                 style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
               >
                 <Trash2 size={12} /> Clear
@@ -67,7 +67,7 @@ export function LogsPage() {
 
         {/* Log entries */}
         <div
-          className="flex-1 overflow-y-auto rounded-lg p-4 hw-mono text-xs leading-relaxed"
+          className="flex-1 overflow-y-auto rounded-xl p-4 studio-mono text-xs leading-relaxed"
           style={{ background: 'var(--color-code-bg)', border: '1px solid var(--color-border)' }}
         >
           {logEntries.length === 0 ? (

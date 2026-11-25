@@ -579,10 +579,9 @@ export function InputArea() {
         </div>
       )}
       <div
-        className="flex items-center gap-2 rounded-lg px-3.5 py-2.5 transition-colors"
+        className="flex items-center gap-2 rounded-xl px-4 py-3 transition-colors studio-glass border"
         style={{
-          background: 'var(--color-input-bg)',
-          border: '1px solid var(--color-input-border)',
+          boxShadow: 'var(--shadow-md)',
         }}
       >
         <textarea
@@ -602,7 +601,7 @@ export function InputArea() {
             onClick={() => setDeepResearch(!deepResearch)}
             disabled={streamState.isStreaming}
             aria-pressed={deepResearch}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50"
             style={{
               background: deepResearch ? 'var(--color-accent-blue-subtle)' : 'var(--color-surface)',
               border: `1px solid ${deepResearch ? 'var(--color-accent-blue)' : 'var(--color-border)'}`,
@@ -612,7 +611,7 @@ export function InputArea() {
           >
             <span>Deep Research</span>
             <span
-              className="hw-led"
+              className="studio-dot"
               style={{
                 background: deepResearch ? 'var(--color-accent-blue)' : 'var(--color-text-tertiary)',
               }}
@@ -629,7 +628,7 @@ export function InputArea() {
           {isCurrentChatStreaming ? (
             <button
               onClick={stopStreaming}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer"
               style={{ background: 'var(--color-error)', color: '#ffffff' }}
               title="Stop generating"
               aria-label="Stop generating"
@@ -642,7 +641,7 @@ export function InputArea() {
               onClick={sendMessage}
               disabled={streamState.isStreaming || !input.trim() || modelLoading || !selectedModel}
               title={selectedModel ? 'Send message' : 'Pick a model first (⌘K)'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-medium transition-colors shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-default"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-default"
               aria-label="Send message"
               style={{
                 background: input.trim() ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
@@ -656,7 +655,7 @@ export function InputArea() {
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between mt-1.5 px-1 text-[10px] hw-mono" style={{ color: 'var(--color-text-tertiary)' }}>
+      <div className="flex items-center justify-between mt-2 px-1 text-[11px] studio-mono" style={{ color: 'var(--color-text-tertiary)' }}>
         <span>
           <kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> newline
         </span>

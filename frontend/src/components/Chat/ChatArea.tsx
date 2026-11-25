@@ -6,7 +6,7 @@ import { StreamingDots } from './StreamingDots';
 import { useAppStore } from '../../lib/store';
 import { shouldAutoplayFinishedReply, useTtsStore } from '../../lib/tts';
 import { stripThinkTags } from '../../lib/message-text';
-import { Sparkles, PanelRightOpen, PanelRightClose, Database, MessageSquare, X, Terminal } from 'lucide-react';
+import { Sparkles, PanelRightOpen, PanelRightClose, Database, MessageSquare, X, CalendarCheck2 } from 'lucide-react';
 import { listConnectors } from '../../lib/connectors-api';
 
 function getGreeting(): string {
@@ -185,63 +185,60 @@ export function ChatArea() {
         {isEmpty ? (
           <div className="flex flex-col items-center justify-center h-full px-4">
             <div
-              className="w-11 h-11 rounded-lg flex items-center justify-center mb-4"
+              className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
               style={{
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
+                background: 'var(--color-accent-subtle)',
+                border: '1px solid color-mix(in srgb, var(--color-accent) 28%, transparent)',
                 color: 'var(--color-accent)',
+                boxShadow: '0 0 32px -6px var(--color-accent-glow)',
               }}
             >
-              <Terminal size={20} />
+              <Sparkles size={22} />
             </div>
-            <h2 className="text-xl font-semibold tracking-tight mb-1.5" style={{ color: 'var(--color-text)' }}>
+            <h2 className="text-2xl font-semibold tracking-tight mb-2" style={{ color: 'var(--color-text)' }}>
               {getGreeting()}
             </h2>
-            <p className="text-sm text-center max-w-md mb-6" style={{ color: 'var(--color-text-secondary)' }}>
-              Ask Friday anything, run local or cloud inference, or orchestrate tools across your workspace.
+            <p className="text-sm text-center max-w-md mb-7 leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+              Ask Friday anything — track your hackathons and projects, draft updates, or run deep research across your workspace.
             </p>
 
             {/* Quick action hints */}
             <div className="flex flex-wrap justify-center gap-2.5">
               <button
+                onClick={() => navigate('/today')}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
+                }}
+              >
+                <CalendarCheck2 size={14} style={{ color: 'var(--color-accent)' }} />
+                Today & Morning Brief
+              </button>
+              <button
                 onClick={() => navigate('/data-sources')}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-medium cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors"
                 style={{
                   background: 'var(--color-surface)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text-secondary)',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-accent)';
-                  e.currentTarget.style.color = 'var(--color-text)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-border)';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }}
               >
-                <Database size={14} style={{ color: 'var(--color-accent)' }} />
+                <Database size={14} style={{ color: 'var(--color-accent-amber)' }} />
                 Connect Data Sources
               </button>
               <button
                 onClick={() => { navigate('/data-sources'); setTimeout(() => window.dispatchEvent(new CustomEvent('switch-tab', { detail: 'messaging' })), 100); }}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-medium cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors"
                 style={{
                   background: 'var(--color-surface)',
                   border: '1px solid var(--color-border)',
                   color: 'var(--color-text-secondary)',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-accent)';
-                  e.currentTarget.style.color = 'var(--color-text)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-border)';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }}
               >
-                <MessageSquare size={14} style={{ color: 'var(--color-accent-blue)' }} />
-                Set Up Messaging Channels
+                <MessageSquare size={14} style={{ color: 'var(--color-accent-purple)' }} />
+                Messaging Channels
               </button>
             </div>
           </div>

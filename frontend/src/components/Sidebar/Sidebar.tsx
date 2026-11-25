@@ -16,6 +16,7 @@ import {
   Loader2,
   ScrollText,
   Database,
+  CalendarCheck2,
 } from 'lucide-react';
 import { ConversationList } from './ConversationList';
 import { useAppStore } from '../../lib/store';
@@ -50,11 +51,15 @@ export function Sidebar() {
     navigate('/');
   };
 
-  const navItems = [
+  const assistantNav = [
     { path: '/', icon: MessageSquare, label: 'Chat' },
-    { path: '/dashboard', icon: BarChart3, label: 'Dashboard' },
-    { path: '/data-sources', icon: Database, label: 'Data Sources' },
+    { path: '/today', icon: CalendarCheck2, label: 'Today & Brief' },
     { path: '/agents', icon: Bot, label: 'Agents' },
+    { path: '/data-sources', icon: Database, label: 'Data Sources' },
+  ];
+
+  const studioNav = [
+    { path: '/dashboard', icon: BarChart3, label: 'Overview' },
     { path: '/logs', icon: ScrollText, label: 'Logs' },
     { path: '/settings', icon: Settings, label: 'Settings' },
     { path: '/get-started', icon: Rocket, label: 'Get Started' },
@@ -64,17 +69,54 @@ export function Sidebar() {
     ? 'Deep Research'
     : selectedModel || serverInfo?.model || 'Select model';
 
+  const renderNavGroup = (label: string, items: typeof assistantNav) => (
+    <div className="flex flex-col gap-0.5">
+      <div className="px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+        {label}
+      </div>
+      {items.map((item) => {
+        const isActive = location.pathname === item.path;
+        return (
+          <button
+            key={item.path}
+            onClick={() => navigate(item.path)}
+            className="relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-colors w-full text-left cursor-pointer"
+            style={{
+              background: isActive ? 'var(--color-accent-subtle)' : 'transparent',
+              color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
+              fontWeight: isActive ? 500 : 400,
+            }}
+            onMouseEnter={(e) => {
+              if (!isActive) {
+                e.currentTarget.style.background = 'var(--color-bg-tertiary)';
+                e.currentTarget.style.color = 'var(--color-text)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isActive) {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--color-text-secondary)';
+              }
+            }}
+          >
+            <item.icon
+              size={16}
+              style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
+            />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <>
       {!sidebarOpen && (
         <button
           onClick={toggleSidebar}
-          className="fixed top-1.5 left-2 z-30 p-1.5 rounded-md transition-colors cursor-pointer"
-          style={{
-            color: 'var(--color-text-secondary)',
-            background: 'var(--color-bg-tertiary)',
-            border: '1px solid var(--color-border)',
-          }}
+          className="fixed top-2.5 left-3 z-30 w-8 h-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer studio-glass border"
+          style={{ color: 'var(--color-text-secondary)' }}
           aria-label="Open sidebar"
         >
           <PanelLeft size={16} />
@@ -84,40 +126,47 @@ export function Sidebar() {
       <aside
         className={`
           flex flex-col h-full shrink-0 transition-all duration-200 ease-out overflow-hidden
-          fixed md:relative z-30
-          ${sidebarOpen ? 'w-[256px]' : 'w-0'}
+          fixed md:relative z-30 studio-glass
+          ${sidebarOpen ? 'w-[264px]' : 'w-0'}
         `}
         style={{
           background: 'var(--color-sidebar)',
-          borderRight: sidebarOpen ? '1px solid var(--color-border)' : 'none',
+          borderRight: sidebarOpen ? '1px solid var(--color-glass-border)' : 'none',
         }}
       >
-        <div className="flex flex-col h-full w-[256px]">
-          {/* Brand & Controls Header */}
+        <div className="flex flex-col h-full w-[264px]">
+          {/* Brand & Window Controls */}
           <div
-            className="h-10 flex items-center justify-between px-3 shrink-0"
-            style={{ borderBottom: '1px solid var(--color-border)' }}
+            className="h-12 flex items-center justify-between px-3.5 shrink-0"
+            style={{ borderBottom: '1px solid var(--color-glass-border)' }}
           >
             <button
               onClick={() => navigate('/')}
-              className="flex items-center gap-2 cursor-pointer"
+              className="flex items-center gap-2.5 cursor-pointer"
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="var(--color-text)"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{
+                  background: 'var(--color-accent-subtle)',
+                  border: '1px solid color-mix(in srgb, var(--color-accent) 28%, transparent)',
+                }}
               >
-                <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2" />
-                <path d="M9.5 16.5V8h6" />
-                <path d="M9.5 12h4.2" />
-                <circle cx="15.5" cy="12" r="1.6" fill="var(--color-accent)" stroke="none" />
-              </svg>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--color-accent)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2" />
+                  <path d="M9.5 16.5V8h6" />
+                  <path d="M9.5 12h4.2" />
+                </svg>
+              </div>
               <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
                 Friday
               </span>
@@ -126,122 +175,56 @@ export function Sidebar() {
             <div className="flex items-center gap-0.5">
               <button
                 onClick={handleNewChat}
-                className="p-1.5 rounded-md transition-colors cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer"
                 style={{ color: 'var(--color-text-secondary)' }}
                 aria-label="Start new chat"
                 title="New chat"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-tertiary)';
-                  e.currentTarget.style.color = 'var(--color-text)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }}
               >
-                <Plus size={15} />
+                <Plus size={16} />
               </button>
               <button
                 onClick={() => updateSettings({ theme: nextTheme })}
-                className="p-1.5 rounded-md transition-colors cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer"
                 style={{ color: 'var(--color-text-secondary)' }}
                 aria-label={`Switch theme to ${nextTheme}`}
                 title={`Theme: ${settings.theme} (click for ${nextTheme})`}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-tertiary)';
-                  e.currentTarget.style.color = 'var(--color-text)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }}
               >
                 <ThemeIcon size={15} />
               </button>
               <button
                 onClick={toggleSidebar}
-                className="p-1.5 rounded-md transition-colors cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded-md transition-colors cursor-pointer"
                 style={{ color: 'var(--color-text-secondary)' }}
                 aria-label="Close sidebar"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-tertiary)';
-                  e.currentTarget.style.color = 'var(--color-text)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }}
               >
                 <PanelLeftClose size={15} />
               </button>
             </div>
           </div>
 
-          {/* Primary Navigation */}
-          <nav className="px-2 py-2.5 flex flex-col gap-0.5 shrink-0">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <button
-                  key={item.path}
-                  onClick={() => navigate(item.path)}
-                  className="relative flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors w-full text-left cursor-pointer"
-                  style={{
-                    background: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
-                    color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                    fontWeight: isActive ? 500 : 400,
-                    border: isActive ? '1px solid var(--color-border)' : '1px solid transparent',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = 'var(--color-bg-secondary)';
-                      e.currentTarget.style.color = 'var(--color-text)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = 'var(--color-text-secondary)';
-                    }
-                  }}
-                >
-                  {isActive && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute left-0 top-1.5 bottom-1.5 w-[2.5px] rounded-r-sm"
-                      style={{ background: 'var(--color-accent)' }}
-                    />
-                  )}
-                  <item.icon
-                    size={15}
-                    style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }}
-                  />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+          {/* Primary Navigation (2 clean groups) */}
+          <nav className="px-2.5 py-2 flex flex-col gap-2 shrink-0">
+            {renderNavGroup('Assistant', assistantNav)}
+            {renderNavGroup('Studio', studioNav)}
           </nav>
 
-          {/* Active Model Hardware Slot */}
-          <div className="px-3 py-2 shrink-0" style={{ borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+          {/* Active Model Card */}
+          <div className="px-3 py-2.5 shrink-0" style={{ borderTop: '1px solid var(--color-glass-border)', borderBottom: '1px solid var(--color-glass-border)' }}>
             <button
               onClick={() => setCommandPaletteOpen(true)}
-              className="w-full flex flex-col gap-1 px-2.5 py-2 rounded-md text-left transition-colors cursor-pointer"
+              className="w-full flex flex-col gap-1 px-3 py-2 rounded-lg text-left transition-colors cursor-pointer"
               style={{
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border)',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-text-tertiary)')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
             >
               <div className="flex items-center justify-between w-full">
-                <span className="hw-label">Active model</span>
+                <span className="studio-label">Model</span>
                 <kbd
-                  className="text-[10px] px-1.5 py-0.5 rounded hw-mono"
+                  className="text-[11px] px-1.5 py-0.5 rounded studio-mono"
                   style={{
                     background: 'var(--color-bg-secondary)',
                     color: 'var(--color-text-tertiary)',
-                    border: '1px solid var(--color-border)',
                   }}
                 >
                   ⌘K
@@ -252,15 +235,15 @@ export function Sidebar() {
                   <Loader2 size={12} className="animate-spin shrink-0" style={{ color: 'var(--color-accent)' }} />
                 ) : (
                   <span
-                    className="hw-led"
+                    className="studio-dot"
                     style={{
-                      background: deepResearch ? 'var(--color-accent-blue)' : 'var(--color-success)',
+                      background: deepResearch ? 'var(--color-accent)' : 'var(--color-success)',
                     }}
                   />
                 )}
                 <span
-                  className="text-xs truncate hw-mono font-medium"
-                  style={{ color: deepResearch ? 'var(--color-accent-blue)' : 'var(--color-text)' }}
+                  className="text-xs truncate font-medium"
+                  style={{ color: deepResearch ? 'var(--color-accent)' : 'var(--color-text)' }}
                 >
                   {activeModelName}
                 </span>
@@ -271,19 +254,19 @@ export function Sidebar() {
           {/* History Header & Search */}
           <div className="px-3 pt-3 pb-1.5 shrink-0 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="hw-label">History</span>
+              <span className="studio-label">Conversations</span>
               <button
                 onClick={handleNewChat}
-                className="text-[11px] font-medium cursor-pointer hover:underline"
+                className="text-xs font-medium cursor-pointer hover:underline"
                 style={{ color: 'var(--color-accent)' }}
               >
                 + New
               </button>
             </div>
             <div
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs"
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs"
               style={{
-                background: 'var(--color-bg-secondary)',
+                background: 'var(--color-bg)',
                 border: '1px solid var(--color-border)',
               }}
             >

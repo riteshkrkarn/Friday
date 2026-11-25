@@ -12,17 +12,17 @@ export function DashboardPage() {
         <header className="mb-6 pb-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="hw-led" style={{ background: 'var(--color-accent)' }} />
-              <h1 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
+              <span className="studio-dot" style={{ background: 'var(--color-accent)' }} />
+              <h1 className="text-xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
                 System Overview
               </h1>
             </div>
-            <div className="text-xs hw-mono" style={{ color: 'var(--color-text-tertiary)' }}>
+            <div className="text-xs studio-mono" style={{ color: 'var(--color-text-tertiary)' }}>
               {stamp}
             </div>
           </div>
           <p className="text-sm mt-1.5 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
-            Live telemetry for the inference engine — power draw, token throughput, and cost savings versus cloud APIs.
+            Energy, token throughput, and cost savings across your local and cloud models.
           </p>
         </header>
 
