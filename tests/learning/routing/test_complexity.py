@@ -231,3 +231,15 @@ class TestComplexityQueryAnalyzer:
         ctx = analyzer.analyze("Hi")
         assert "complexity_tier" in ctx.metadata
         assert "signals" in ctx.metadata
+
+    def test_web_app_code_request_not_trivial(self) -> None:
+        result = score_complexity(
+            "give me html css and js code in a index.html file for a web app"
+        )
+        assert result.signals["has_code"] is True
+        assert result.tier != "trivial"
+        assert result.suggested_max_tokens >= 2048
+
+    def test_nemotron_thinking_model_gets_multiplier(self) -> None:
+        assert is_thinking_model("nvidia/nemotron-3-ultra-550b-a55b") is True
+        assert adjust_tokens_for_model(4096, "nvidia/nemotron-3-ultra-550b-a55b") == 8192

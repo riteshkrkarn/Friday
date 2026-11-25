@@ -116,3 +116,30 @@ def test_model_lock_registry_does_not_retain_idle_locks_or_agents():
 
     assert agent_ref() is None
     assert agent_id not in _agent_model_locks
+
+
+def test_handle_agent_applies_and_restores_max_tokens_and_temperature():
+    class _AgentWithBudgets:
+        def __init__(self) -> None:
+            self._model = "default-model"
+            self._max_tokens = 1024
+            self._temperature = 0.7
+            self.seen: tuple[str, int, float] | None = None
+
+        def run(self, input_text: str, context=None) -> AgentResult:
+            self.seen = (self._model, self._max_tokens, self._temperature)
+            return AgentResult(content="ok", turns=1)
+
+    agent = _AgentWithBudgets()
+    req = ChatCompletionRequest(
+        model="custom-model",
+        messages=[ChatMessage(role="user", content="hello")],
+        max_tokens=8192,
+        temperature=0.2,
+    )
+    _handle_agent(agent, "custom-model", req)
+
+    assert agent.seen == ("custom-model", 8192, 0.2)
+    assert agent._model == "default-model"
+    assert agent._max_tokens == 1024
+    assert agent._temperature == 0.7

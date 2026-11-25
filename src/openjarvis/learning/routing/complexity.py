@@ -21,7 +21,10 @@ from openjarvis.learning._stubs import QueryAnalyzer
 
 _CODE_PATTERNS = re.compile(
     r"```|`[^`]+`|\bdef\s|\bclass\s|\bimport\s|\bfunction\s|\bconst\s|\bvar\s|\blet\s|"
-    r"\bif\s*\(|->|=>|\{\s*\}|\bfor\s+\w+\s+in\s|#include|System\.out",
+    r"\bif\s*\(|->|=>|\{\s*\}|\bfor\s+\w+\s+in\s|#include|System\.out|"
+    r"\b(?:html|css|js|javascript|typescript|python|rust|golang|java|sql|react|vue|"
+    r"svelte|dockerfile|regex|api|endpoint|web\s*app|index\.html)\b|"
+    r"\b(?:code|script|program|component|stylesheet|webpage|website)\b",
     re.IGNORECASE,
 )
 _MATH_PATTERNS = re.compile(
@@ -42,7 +45,7 @@ _MULTI_STEP_PATTERNS = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _CREATIVE_PATTERNS = re.compile(
-    r"\bcreate\b|\bdesign\b|\bdraft\b|\bcompose\b",
+    r"\bcreate\b|\bdesign\b|\bdraft\b|\bcompose\b|\bbuild\b|\bimplement\b",
     re.IGNORECASE,
 )
 _MULTI_STEP_PAIRS = (
@@ -62,7 +65,7 @@ _CREATIVE_PAIRS = (
 
 # Models known to use internal chain-of-thought that consumes output tokens.
 _THINKING_MODEL_PATTERNS = re.compile(
-    r"qwen3\.5|qwq|deepseek-r1|o1-|o3-|o4-", re.IGNORECASE
+    r"qwen3\.5|qwq|deepseek-r1|nemotron-3|nemotron-ultra|o1-|o3-|o4-", re.IGNORECASE
 )
 
 # ---------------------------------------------------------------------------

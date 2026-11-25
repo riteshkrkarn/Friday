@@ -688,8 +688,16 @@ def _handle_agent(
         t_lock = time.time()
         logger.info("[AGENT] Acquired model lock in %.3fs (model=%s). Executing agent...", t_lock - t0, model)
         original_model = agent._model
+        has_max_tokens = hasattr(agent, "_max_tokens")
+        has_temperature = hasattr(agent, "_temperature")
+        original_max_tokens = getattr(agent, "_max_tokens", None)
+        original_temperature = getattr(agent, "_temperature", None)
         if model:
             agent._model = model
+        if has_max_tokens and req.max_tokens:
+            agent._max_tokens = req.max_tokens
+        if has_temperature and req.temperature is not None:
+            agent._temperature = req.temperature
         try:
             if trace_store is not None:
                 from openjarvis.traces.collector import TraceCollector
@@ -707,6 +715,10 @@ def _handle_agent(
             raise
         finally:
             agent._model = original_model
+            if has_max_tokens:
+                agent._max_tokens = original_max_tokens
+            if has_temperature:
+                agent._temperature = original_temperature
 
     usage = UsageInfo(
         prompt_tokens=result.metadata.get("prompt_tokens", 0),
@@ -1123,8 +1135,6 @@ async def _handle_stream(
         except Exception as exc:
             # Surface errors as a content chunk so the frontend can
             # display them instead of silently failing.
-            import logging
-
             logging.getLogger("openjarvis.server").error(
                 "Stream error: %s",
                 exc,
