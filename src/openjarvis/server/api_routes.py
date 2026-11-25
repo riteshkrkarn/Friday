@@ -1293,6 +1293,9 @@ def include_all_routes(app) -> None:
     from openjarvis.server.approval_routes import (
         router as approval_router,  # noqa: PLC0415
     )
+    from openjarvis.server.brief_routes import (
+        router as brief_router,  # noqa: PLC0415
+    )
     from openjarvis.server.item_routes import (
         router as item_router,  # noqa: PLC0415
     )
@@ -1301,6 +1304,7 @@ def include_all_routes(app) -> None:
     )
 
     app.include_router(approval_router)
+    app.include_router(brief_router)
     app.include_router(item_router)
     app.include_router(reminder_router)
     app.include_router(agents_router)

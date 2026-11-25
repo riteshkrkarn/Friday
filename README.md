@@ -16,7 +16,7 @@
 
 ## Overview
 
-**Second Me** is a personal assistant designed to sit beside you throughout your daily workflow on Windows. Built on the OpenJarvis agentic runtime and trace/memory primitives, it is tailored to remember your **projects, hackathons, deadlines, achievements, bills, and expected income**, surface timely reminders, generate personalized briefings, and learn from your repeated habits.
+**Second Me** is a personal assistant designed to sit beside you throughout your daily workflow on Windows. Built on the OpenJarvis agentic runtime and trace/memory primitives, it is tailored to remember your **projects, hackathons, deadlines, and achievements**, surface timely reminders, generate personalized briefings, and learn from your repeated habits.
 
 ---
 
@@ -59,7 +59,10 @@ Open `http://localhost:5173` in your browser (or run `npm run build` to bundle i
 
 ### 4. Run Tests
 ```powershell
-# Backend cloud key & model endpoint tests
+# Second Me backend unit tests (offline, mocked)
+$env:PYTHONPATH="src;.venv\Lib\site-packages"; pytest tests/server/test_cloud_key_setup.py tests/tools/test_item_store.py tests/capture/test_quick_capture.py tests/reminders/test_reminders.py -q
+
+# Live cloud endpoint tests (requires network + .env keys)
 $env:PYTHONPATH="src"; uv run pytest tests/engine/test_cloud_endpoints.py -v
 
 # Frontend unit tests
@@ -68,22 +71,18 @@ cd frontend; npm test
 
 ---
 
-## Roadmap (`PLAN.md`)
+## Implementation Status & Roadmap (`PLAN.md`)
 
-### v1 Scope
-1. **Quick Capture by Voice:** Double-tap Right `Ctrl` (configurable hotkey) to record voice notes -> STT (local Whisper first, Deepgram fallback) -> save directly to the item store, with Telegram text fallback.
-2. **Item Store (SQLite):** Track `hackathon`, `project`, `task`, `achievement`, `bill`, and `income` items with title, type, deadline/due date, amount (for bills and income), status, notes, and created date — searchable and filterable by type, status, and date. Supports recurring or one-time bills and expected income (e.g., salary or stipend).
-3. **Smart Reminders:** Daily check of upcoming deadlines with configurable lead time, resume/portfolio update reminders for completed projects/wins, advance **bill due reminders**, and **expected income tracking** (notifying when due and flagging if late). Delivery order: Email -> Telegram -> Web UI.
-4. **Personalized Reports:** Morning brief and custom reports built from your saved items, deadlines, pending updates, bills/income, and priorities.
-5. **Repetition Learning:** Tracks repeated requests/patterns and proposes new automation rules after a repeat threshold (default: 3), always requiring confirmation before acting.
-6. **Cloud Model Setup & Tests:** Swappable NIM/Groq inference backed by automated endpoint and key verification tests.
+### v1 Status
+1. **Cloud Model Setup & Tests — Done:** Swappable NIM/Groq inference backed by [test_cloud_key_setup.py](tests/server/test_cloud_key_setup.py) and [test_cloud_endpoints.py](tests/engine/test_cloud_endpoints.py).
+2. **Item Store (SQLite + Tool + API) — Done:** Tracks `hackathon`, `project`, `task`, and `achievement` items with title, type, due date, status, `needs_update` flag, and notes via [item_store.py](src/openjarvis/tools/item_store.py), `item_store` agent tool, and `/v1/items` routes.
+3. **Quick Capture Flow — Done:** Windows `Right Ctrl` double-tap hotkey listener ([hotkey_listener.py](src/openjarvis/capture/hotkey_listener.py)), Whisper-first / Deepgram-fallback STT ([quick_capture.py](src/openjarvis/capture/quick_capture.py)), Telegram `/capture` fallback ([telegram_fallback.py](src/openjarvis/capture/telegram_fallback.py)), and `POST /v1/items/capture`.
+4. **Smart Reminders — Done:** Daily overdue/upcoming deadline checks and resume/portfolio update reminders ([service.py](src/openjarvis/reminders/service.py)) with ordered delivery (Email → Telegram → Jarvis Web UI) and `/v1/reminders` routes.
+5. **Personalized Reports — In Progress:** Morning brief and custom reports built from your saved items and remembered include/exclude preferences.
+6. **Repetition Learning — Planned:** Tracks repeated requests/patterns and proposes new automation rules after 3 repeats, always requiring confirmation before acting.
 
-### Finance & Privacy (v1)
-- Bills and income are added manually via voice or text (no bank login integration in v1).
-- Never stores bank passwords, card numbers, or account numbers.
-- Prompts sent to cloud endpoints (NVIDIA NIM / Groq) include the text you send; local-model routing for sensitive finance queries is planned as a future option.
-
-### Later (Post-v1)
+### Later / v2
+- **Finance (Bills & Income):** Manual voice/text tracking of recurring or one-time bills and expected income (deferred to v2).
 - **Achievement Prompts:** Post-win/project prompts to update resume or portfolio items.
 - **Interactive Career & Workload Discussion:** Grounded in your saved item history.
 - **Schedule Generation:** Daily/weekly time-blocking suggestions derived from open tasks and deadlines.
