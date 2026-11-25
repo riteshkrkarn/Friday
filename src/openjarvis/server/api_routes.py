@@ -1302,11 +1302,15 @@ def include_all_routes(app) -> None:
     from openjarvis.server.reminder_routes import (
         router as reminder_router,  # noqa: PLC0415
     )
+    from openjarvis.server.repetition_routes import (
+        router as repetition_router,  # noqa: PLC0415
+    )
 
     app.include_router(approval_router)
     app.include_router(brief_router)
     app.include_router(item_router)
     app.include_router(reminder_router)
+    app.include_router(repetition_router)
     app.include_router(agents_router)
     app.include_router(memory_router)
     app.include_router(traces_router)

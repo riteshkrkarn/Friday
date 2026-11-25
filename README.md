@@ -60,7 +60,7 @@ Open `http://localhost:5173` in your browser (or run `npm run build` to bundle i
 ### 4. Run Tests
 ```powershell
 # Second Me backend unit tests (offline, mocked)
-$env:PYTHONPATH="src;.venv\Lib\site-packages"; pytest tests/server/test_cloud_key_setup.py tests/tools/test_item_store.py tests/capture/test_quick_capture.py tests/reminders/test_reminders.py -q
+$env:PYTHONPATH="src;.venv\Lib\site-packages"; pytest tests/server/test_cloud_key_setup.py tests/tools/test_item_store.py tests/capture/test_quick_capture.py tests/reminders/test_reminders.py tests/reports/test_morning_brief.py tests/learning/test_repetition.py -q
 
 # Live cloud endpoint tests (requires network + .env keys)
 $env:PYTHONPATH="src"; uv run pytest tests/engine/test_cloud_endpoints.py -v
@@ -78,8 +78,8 @@ cd frontend; npm test
 2. **Item Store (SQLite + Tool + API) — Done:** Tracks `hackathon`, `project`, `task`, and `achievement` items with title, type, due date, status, `needs_update` flag, and notes via [item_store.py](src/openjarvis/tools/item_store.py), `item_store` agent tool, and `/v1/items` routes.
 3. **Quick Capture Flow — Done:** Windows `Right Ctrl` double-tap hotkey listener ([hotkey_listener.py](src/openjarvis/capture/hotkey_listener.py)), Whisper-first / Deepgram-fallback STT ([quick_capture.py](src/openjarvis/capture/quick_capture.py)), Telegram `/capture` fallback ([telegram_fallback.py](src/openjarvis/capture/telegram_fallback.py)), and `POST /v1/items/capture`.
 4. **Smart Reminders — Done:** Daily overdue/upcoming deadline checks and resume/portfolio update reminders ([service.py](src/openjarvis/reminders/service.py)) with ordered delivery (Email → Telegram → Jarvis Web UI) and `/v1/reminders` routes.
-5. **Personalized Reports — In Progress:** Morning brief and custom reports built from your saved items and remembered include/exclude preferences.
-6. **Repetition Learning — Planned:** Tracks repeated requests/patterns and proposes new automation rules after 3 repeats, always requiring confirmation before acting.
+5. **Personalized Reports — Done:** Morning brief and custom reports ([morning_brief.py](src/openjarvis/reports/morning_brief.py)) built from your saved items and remembered include/exclude preferences via `/v1/brief`.
+6. **Repetition Learning — Done:** Tracks repeated requests/patterns ([repetition.py](src/openjarvis/learning/repetition.py)) and proposes confirmation-gated rules after 3 repeats via `/v1/repetitions`, never acting without user confirmation.
 
 ### Later / v2
 - **Finance (Bills & Income):** Manual voice/text tracking of recurring or one-time bills and expected income (deferred to v2).
