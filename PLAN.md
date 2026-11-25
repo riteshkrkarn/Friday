@@ -16,18 +16,14 @@ A personal assistant that sits beside you. It remembers your projects, hackathon
    - Fallback: send the same text through Telegram.
 
 2. **Item store**
-   - Types: hackathon, project, task, achievement, bill, income.
-   - Fields: title, type, deadline or due date, amount (bills and income), status, notes, created date.
-   - Bills: recurring or one-time, with amount and due date.
-   - Income: expected amount and expected date (for example, salary or stipend).
+   - Types: hackathon, project, task, achievement.
+   - Fields: title, type, deadline or due date, status, notes, created date.
    - Can be searched and filtered by type, status, and date.
 
 3. **Reminders**
    - Daily check of upcoming deadlines.
    - Reminder before each deadline (time before is configurable).
    - Update reminders: after a project or win is saved, remind you to update your resume or portfolio. Monitors items that are done but not yet updated.
-   - Bill reminders: a set number of days before each bill is due.
-   - Income reminders: a note when expected money is due to arrive, and a flag if it is late.
    - Delivery order: email first, then Telegram, then the Jarvis web interface.
 
 4. **Personalized reports (all of them)**
@@ -48,8 +44,9 @@ A personal assistant that sits beside you. It remembers your projects, hackathon
 7. **Tests**
    - Tests for the cloud key setup (backend, not frontend).
 
-## Later (out of v1)
+## Later / v2 (out of v1)
 
+- **Finance (bills & income):** Add bills (recurring or one-time, amount, due date) and income (expected amount, expected date, late flag) by voice or text. No bank login, no bank passwords/card numbers/account numbers. Route finance questions to a local model or confirm cloud privacy before enabling.
 - **Achievement prompts:** After a win or project, ask whether to add it to your resume or portfolio.
 - **Discussion:** Talk about projects, career, workload, and schedule using saved items.
 - **Schedule generation:** Build a daily or weekly plan from your deadlines and tasks. It suggests time blocks, for example "Mon 10am to 12pm: finish hackathon demo."
@@ -57,34 +54,28 @@ A personal assistant that sits beside you. It remembers your projects, hackathon
 ## Out of scope (decided)
 
 - Portfolio and resume export.
-- Local models.
-
-## Finance (proposed for v1, needs your confirmation)
-
-- You add bills and income by voice or text. No bank login in v1.
-- Do not store bank passwords, card numbers, or account numbers.
-- Privacy: the cloud model (NVIDIA NIM) receives the text you send it. Finance details will go to that cloud service. Confirm you are fine with this, or we can route finance questions to a local model later.
+- Local models (for v1).
 
 ## Decisions
 
 - Speech engine: Whisper first, Deepgram if Whisper is too slow. Pick whichever works better after testing.
 - Repeat threshold for suggested rules: 3.
-- Reminder email: riteshkumarkarn414@gmail.com (to confirm, the address ends in "gmail" with no ".com" in your message).
+- Reminder email: riteshkumarkarn414@gmail.com (confirmed).
+- Telegram is the fallback capture and reminder channel (confirmed).
+- Schedule generation stays in "Later" (confirmed).
+- Hotkey: Right Ctrl double-tap works on Windows (confirmed).
+- Finance (bills & income): deferred to v2 (confirmed).
 - Learned rules: always confirm with you before acting.
 
 ## Open Questions
 
-- Confirm the hotkey works on your laptop (test script: hotkey_test.py).
-- Confirm the reminder email address above.
-- Confirm the Telegram bot setup, if used as fallback.
-- Move schedule generation into v1, or keep it later?
+- Telegram bot setup: needs a bot token from BotFather when we build the fallback.
 
 ## Next Steps
 
-1. Confirm the hotkey test.
-2. Design the item store (SQLite table and tool).
-3. Build the capture flow (hotkey, speech, save).
+1. Write tests for the cloud key setup (backend).
+2. Design and build the item store (SQLite table, tool, and API).
+3. Build the capture flow (hotkey, speech, save, Telegram fallback).
 4. Build the daily reminder and update-reminder jobs.
 5. Build the personalized morning brief.
 6. Build the repetition tracker.
-7. Write tests for the cloud key change.

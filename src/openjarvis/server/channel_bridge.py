@@ -170,6 +170,11 @@ class ChannelBridge:
             rest = parts[2] if len(parts) > 2 else "status"
             return self._handle_agent_command(agent_id, rest)
 
+        if cmd == "/capture":
+            from openjarvis.capture.telegram_fallback import handle_telegram_capture
+
+            return handle_telegram_capture(content)
+
         # Unknown command — fall through to chat
         return None
 
