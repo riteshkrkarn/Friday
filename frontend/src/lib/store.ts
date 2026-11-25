@@ -151,6 +151,47 @@ const INITIAL_STREAM: StreamState = {
   content: '',
 };
 
+function deriveChatTitle(rawMessage: string): string {
+  const cleaned = rawMessage
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!cleaned) return 'New chat';
+
+  const lower = cleaned.toLowerCase();
+  if (/^(hi|hello|hey|yo|sup|good\s+(morning|afternoon|evening))[\s!.,?]*$/i.test(lower)) {
+    return 'Quick Chat';
+  }
+  if (/what(?:'s| is)\s+your\s+name|who\s+are\s+you/i.test(lower)) {
+    return 'Assistant Identity';
+  }
+  if (/(?:walkthrough|things\s+you\s+can\s+do|what\s+can\s+you\s+do|capabilities)/i.test(lower)) {
+    return 'Capabilities Walkthrough';
+  }
+  if (/(?:morning\s+brief|daily\s+brief|digest)/i.test(lower)) {
+    return 'Morning Briefing';
+  }
+  if (/(?:reminder|deadline|hackathon|achievement|task|item_store)/i.test(lower)) {
+    return 'Tasks & Reminders';
+  }
+
+  // Strip common conversational prefixes to surface the actual topic
+  let topic = cleaned
+    .replace(/^(?:hi|hello|hey)(?:\s+friday)?[,!.\s]+/i, '')
+    .replace(/^(?:friday[,!\s]+)+/i, '')
+    .replace(/^(?:can|could|would|will)\s+you\s+(?:please\s+)?/i, '')
+    .replace(/^(?:please\s+)?(?:give\s+me|tell\s+me|show\s+me|write\s+me|help\s+me(?:\s+with)?|explain|summarize|create|build|make)\s+(?:a|an|the)?\s*/i, '')
+    .replace(/[?!.]+$/, '')
+    .trim();
+
+  if (!topic) topic = cleaned;
+  // Capitalize first letter and truncate cleanly on a word boundary
+  topic = topic.charAt(0).toUpperCase() + topic.slice(1);
+  if (topic.length <= 42) return topic;
+  const cut = topic.slice(0, 42);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 18 ? cut.slice(0, lastSpace) : cut).trim() + '...';
+}
+
 interface AppState {
   // Conversations
   conversations: Conversation[];
@@ -190,6 +231,7 @@ interface AppState {
   importOverlayConversation: () => Promise<void>;
   createConversation: (model?: string) => string;
   selectConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
   deleteConversation: (id: string) => void;
   loadMessages: (conversationId: string | null) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
@@ -384,6 +426,21 @@ export const useAppStore = create<AppState>((set, get) => {
       });
     },
 
+    renameConversation: (id: string, title: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      const store = loadConversations();
+      const conv = store.conversations[id];
+      if (!conv) return;
+      conv.title = trimmed;
+      saveConversations(store);
+      set({
+        conversations: Object.values(store.conversations).sort(
+          (a, b) => b.updatedAt - a.updatedAt,
+        ),
+      });
+    },
+
     deleteConversation: (id: string) => {
       const streamState = get().streamState;
       if (streamState.isStreaming && streamState.conversationId === id) return;
@@ -424,10 +481,8 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!conv) return;
       conv.messages.push(message);
       conv.updatedAt = Date.now();
-      if (message.role === 'user' && conv.title === 'New chat') {
-        conv.title =
-          message.content.slice(0, 50) +
-          (message.content.length > 50 ? '...' : '');
+      if (message.role === 'user' && (conv.title === 'New chat' || conv.title === 'Quick Chat')) {
+        conv.title = deriveChatTitle(message.content);
       }
       saveConversations(store);
       const conversations = Object.values(store.conversations).sort(

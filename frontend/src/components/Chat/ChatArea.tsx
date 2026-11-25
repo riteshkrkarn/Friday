@@ -11,9 +11,10 @@ import { listConnectors } from '../../lib/connectors-api';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 23) return 'Good evening';
+  return 'Working late?';
 }
 
 export function ChatArea() {
@@ -197,7 +198,7 @@ export function ChatArea() {
               {getGreeting()}
             </h2>
             <p className="text-sm text-center max-w-md mb-6" style={{ color: 'var(--color-text-secondary)' }}>
-              Ask OpenJarvis anything, run local or cloud inference, or orchestrate tools across your workspace.
+              Ask Friday anything, run local or cloud inference, or orchestrate tools across your workspace.
             </p>
 
             {/* Quick action hints */}

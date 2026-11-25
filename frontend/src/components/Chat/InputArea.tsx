@@ -494,18 +494,21 @@ export function InputArea() {
         complexity_tier: complexity?.tier,
         suggested_max_tokens: complexity?.suggested_max_tokens,
       };
-      // Check if the response has digest audio available
+      // Check if the response has digest audio available (only when the reply looks like a digest/briefing)
       let audioMeta: { url: string } | undefined;
-      try {
-        const digestRes = await fetch(`${getBase()}/api/digest`, { headers: authHeaders() });
-        if (digestRes.ok) {
-          const digest = await digestRes.json();
-          if (digest.audio_available) {
-            audioMeta = { url: `${getBase()}/api/digest/audio` };
+      const lowerContent = accumulatedContent.toLowerCase();
+      if (lowerContent.includes('digest') || lowerContent.includes('morning brief')) {
+        try {
+          const digestRes = await fetch(`${getBase()}/api/digest`, { headers: authHeaders() });
+          if (digestRes.ok) {
+            const digest = await digestRes.json();
+            if (digest.audio_available) {
+              audioMeta = { url: `${getBase()}/api/digest/audio` };
+            }
           }
+        } catch {
+          // Not a digest response or server unavailable — skip
         }
-      } catch {
-        // Not a digest response or server unavailable — skip
       }
 
       updateLastAssistant(
@@ -587,7 +590,7 @@ export function InputArea() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={selectedModel ? 'Ask OpenJarvis or run a command...' : 'Pick a model first (⌘K)...'}
+          placeholder={selectedModel ? 'Ask Friday or run a command...' : 'Pick a model first (⌘K)...'}
           rows={1}
           className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed"
           style={{ color: 'var(--color-text)', maxHeight: '200px' }}
