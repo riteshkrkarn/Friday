@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, CheckCircle, ChevronDown, ChevronUp, Clock, XCircle } from 'lucide-react';
+import { Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { approveAction, denyAction, fetchPendingApprovals } from '../lib/api';
 import type { PendingApproval } from '../lib/api';
 
-const TIER_STYLES: Record<string, { label: string; color: string; bg: string }> = {
-  trivial: { label: 'Trivial', color: 'var(--color-text-secondary)', bg: 'color-mix(in srgb, var(--color-text-secondary) 10%, transparent)' },
-  low:     { label: 'Low',     color: '#3b82f6',                    bg: 'rgba(59,130,246,0.12)' },
-  medium:  { label: 'Medium',  color: 'var(--color-warning)',       bg: 'color-mix(in srgb, var(--color-warning) 12%, transparent)' },
-  high:    { label: 'High',    color: 'var(--color-error)',         bg: 'color-mix(in srgb, var(--color-error) 12%, transparent)' },
+const TIER_LABELS: Record<string, string> = {
+  trivial: 'Trivial',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
 };
 
 function timeAgo(iso: string): string {
@@ -75,26 +75,20 @@ export function ApprovalBell({ inline = false }: { inline?: boolean } = {}) {
   const count = approvals.length;
 
   return (
-    <div ref={containerRef} className={inline ? 'relative' : 'fixed top-2 right-3 z-40'}>
+    <div ref={containerRef} className={inline ? 'relative' : 'fixed top-3 right-3 z-40'}>
       {/* Bell trigger */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="relative p-2 rounded-lg transition-colors cursor-pointer"
+        className="tn-icon-btn relative"
         title="Agent approvals"
-        style={{
-          color: count > 0 ? 'var(--color-text)' : 'var(--color-text-secondary)',
-          background: open
-            ? 'var(--color-bg-tertiary)'
-            : count > 0
-            ? 'color-mix(in srgb, var(--color-error) 8%, transparent)'
-            : 'transparent',
-        }}
+        aria-expanded={open}
+        style={count > 0 ? { color: 'var(--color-text)' } : undefined}
       >
         <Bell size={17} />
         {count > 0 && (
           <span
-            className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full text-[10px] font-bold px-1 leading-none"
-            style={{ background: 'var(--color-error)', color: '#fff' }}
+            className="tn-mono absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-[2px] text-[10px] font-bold leading-none"
+            style={{ background: 'var(--color-text)', color: 'var(--color-bg)' }}
           >
             {count > 99 ? '99+' : count}
           </span>
@@ -104,33 +98,19 @@ export function ApprovalBell({ inline = false }: { inline?: boolean } = {}) {
       {/* Dropdown */}
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 rounded-xl shadow-2xl overflow-hidden flex flex-col"
-          style={{
-            width: '340px',
-            maxHeight: '500px',
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border)',
-          }}
+          className="tn-panel tn-rule-top absolute right-0 top-full mt-2 overflow-hidden flex flex-col z-40"
+          style={{ width: 'min(360px, calc(100vw - 24px))', maxHeight: '500px' }}
         >
           {/* Header */}
           <div
             className="flex items-center justify-between px-4 py-3 shrink-0"
             style={{ borderBottom: '1px solid var(--color-border)' }}
           >
-            <div className="flex items-center gap-2">
-              <Bell size={13} style={{ color: 'var(--color-accent)' }} />
-              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                Agent Approvals
-              </span>
-            </div>
+            <span className="text-[14px] font-bold" style={{ color: 'var(--color-text)' }}>
+              Agent Approvals
+            </span>
             {count > 0 && (
-              <span
-                className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-                style={{
-                  background: 'color-mix(in srgb, var(--color-error) 12%, transparent)',
-                  color: 'var(--color-error)',
-                }}
-              >
+              <span className="tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
                 {count} pending
               </span>
             )}
@@ -139,15 +119,12 @@ export function ApprovalBell({ inline = false }: { inline?: boolean } = {}) {
           {/* Body */}
           <div className="overflow-y-auto flex-1">
             {count === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-2">
-                <CheckCircle size={26} style={{ color: 'var(--color-text-secondary)', opacity: 0.35 }} />
-                <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                  No pending approvals
-                </span>
+              <div className="px-4 py-8 text-[14px]" style={{ color: 'var(--color-text-secondary)' }}>
+                No pending approvals
               </div>
             ) : (
               approvals.map((action, idx) => {
-                const tier = TIER_STYLES[action.tier] ?? TIER_STYLES.medium;
+                const tierLabel = TIER_LABELS[action.tier] ?? TIER_LABELS.medium;
                 const isExpanded = !!expanded[action.id];
                 const isLoading = !!processing[action.id];
                 const hasPayload = Object.keys(action.payload ?? {}).length > 0;
@@ -161,62 +138,55 @@ export function ApprovalBell({ inline = false }: { inline?: boolean } = {}) {
                     }}
                   >
                     {/* Row 1: action type + tier + time */}
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span
-                        className="text-[11px] font-mono font-semibold"
-                        style={{ color: 'var(--color-accent)' }}
-                      >
+                    <div className="flex items-center justify-between gap-3 mb-1.5">
+                      <span className="tn-mono text-[12px] font-medium truncate" style={{ color: 'var(--color-text)' }}>
                         {action.action_type}
                       </span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3 shrink-0">
                         <span
-                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                          style={{ background: tier.bg, color: tier.color }}
+                          className="text-[11px] uppercase tracking-[0.06em]"
+                          style={{
+                            color: action.tier === 'high' ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                            fontWeight: action.tier === 'high' ? 700 : 500,
+                          }}
                         >
-                          {tier.label}
+                          {tierLabel}
                         </span>
-                        <span
-                          className="text-[10px] flex items-center gap-0.5"
-                          style={{ color: 'var(--color-text-secondary)' }}
-                        >
-                          <Clock size={9} />
+                        <span className="tn-mono text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
                           {timeAgo(action.created_at)}
                         </span>
                       </div>
                     </div>
 
                     {/* Description */}
-                    <p
-                      className="text-[13px] mb-2.5 leading-snug"
-                      style={{ color: 'var(--color-text)' }}
-                    >
+                    <p className="text-[14px] leading-5 mb-2.5" style={{ color: 'var(--color-text)' }}>
                       {action.description}
                     </p>
 
                     {/* Expandable payload */}
                     {hasPayload && (
                       <button
-                        className="flex items-center gap-1 text-[11px] mb-2 cursor-pointer"
+                        className="flex items-center gap-1 text-[12px] mb-2 cursor-pointer rounded-[2px]"
                         style={{ color: 'var(--color-text-secondary)' }}
+                        aria-expanded={isExpanded}
                         onClick={() =>
                           setExpanded(e => ({ ...e, [action.id]: !e[action.id] }))
                         }
                       >
-                        {isExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                        {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                         {isExpanded ? 'Hide details' : 'View details'}
                       </button>
                     )}
 
                     {isExpanded && (
                       <pre
-                        className="text-[10px] rounded-lg p-2.5 mb-2.5 overflow-x-auto"
+                        className="tn-mono text-[11px] leading-[16px] rounded-[2px] p-2.5 mb-2.5 overflow-x-auto"
                         style={{
-                          background: 'var(--color-bg-tertiary)',
+                          background: 'var(--color-code-bg)',
+                          border: '1px solid var(--color-border)',
                           color: 'var(--color-text-secondary)',
-                          fontFamily: 'monospace',
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-all',
-                          lineHeight: '1.5',
                         }}
                       >
                         {JSON.stringify(action.payload, null, 2)}
@@ -228,27 +198,15 @@ export function ApprovalBell({ inline = false }: { inline?: boolean } = {}) {
                       <button
                         onClick={() => handleApprove(action.id)}
                         disabled={isLoading}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer disabled:opacity-40"
-                        style={{
-                          background: 'color-mix(in srgb, var(--color-success) 12%, transparent)',
-                          color: 'var(--color-success)',
-                          border: '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)',
-                        }}
+                        className="tn-btn tn-btn-primary tn-btn-sm flex-1"
                       >
-                        <CheckCircle size={12} />
                         Approve
                       </button>
                       <button
                         onClick={() => handleDeny(action.id)}
                         disabled={isLoading}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity cursor-pointer disabled:opacity-40"
-                        style={{
-                          background: 'color-mix(in srgb, var(--color-error) 12%, transparent)',
-                          color: 'var(--color-error)',
-                          border: '1px solid color-mix(in srgb, var(--color-error) 22%, transparent)',
-                        }}
+                        className="tn-btn tn-btn-danger tn-btn-sm flex-1"
                       >
-                        <XCircle size={12} />
                         Deny
                       </button>
                     </div>

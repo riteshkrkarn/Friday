@@ -29,10 +29,11 @@ export function SystemPulse({ apiReachable }: { apiReachable: boolean | null }) 
 
   return (
     <div
+      aria-hidden="true"
       className="fixed top-0 left-0 right-0 h-[2px] z-50"
       style={{
-        backgroundColor: state === 'inferencing' ? 'var(--color-accent)' : 'var(--color-accent-blue)',
-        animation: 'pulse-glow 1.4s ease-in-out infinite',
+        backgroundColor: 'var(--action)',
+        opacity: state === 'inferencing' ? 1 : 0.5,
       }}
     />
   );

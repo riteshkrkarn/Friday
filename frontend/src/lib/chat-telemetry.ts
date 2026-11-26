@@ -1,4 +1,4 @@
-const CLOUD_PREFIXES = [
+export const CLOUD_PREFIXES = [
   'gpt-',
   'o1-',
   'o3-',

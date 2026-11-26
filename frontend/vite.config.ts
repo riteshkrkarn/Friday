@@ -28,8 +28,8 @@ export default defineConfig({
         name: 'Friday',
         short_name: 'Friday',
         description: 'Personal AI assistant built on OpenJarvis',
-        theme_color: '#121214',
-        background_color: '#121214',
+        theme_color: '#141414',
+        background_color: '#141414',
         display: 'standalone',
         icons: [
           { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml' },

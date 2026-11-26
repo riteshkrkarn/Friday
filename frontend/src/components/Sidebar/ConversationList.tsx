@@ -19,6 +19,9 @@ function formatRelativeTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
+const ROW_ACTION =
+  'tn-strip-icon opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity';
+
 export function ConversationList({ searchQuery }: Props) {
   const navigate = useNavigate();
   const conversations = useAppStore((s) => s.conversations);
@@ -52,31 +55,22 @@ export function ConversationList({ searchQuery }: Props) {
 
   if (filtered.length === 0) {
     return (
-      <div className="px-3 py-8 text-center text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+      <div className="px-5 py-6 text-[13px]" style={{ color: 'var(--strip-muted)' }}>
         {searchQuery ? 'No matching chats' : 'No conversations yet'}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-0.5 py-1">
+    <div className="flex flex-col">
       {filtered.map((conv) => {
         const isActive = conv.id === activeId;
         const isStreaming = conv.id === streamingConversationId;
         return (
           <div
             key={conv.id}
-            className="group flex items-center rounded-md cursor-pointer transition-colors"
-            style={{
-              background: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
-              border: isActive ? '1px solid var(--color-border)' : '1px solid transparent',
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive) e.currentTarget.style.background = 'var(--color-bg-secondary)';
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive) e.currentTarget.style.background = 'transparent';
-            }}
+            className="tn-convo group flex items-center pr-2 cursor-pointer"
+            data-active={isActive ? 'true' : undefined}
           >
             <button
               onClick={() => {
@@ -88,7 +82,8 @@ export function ConversationList({ searchQuery }: Props) {
                 e.stopPropagation();
                 startRename(conv.id, conv.title);
               }}
-              className="flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer"
+              className="flex-1 text-left pl-5 pr-1 py-1.5 min-w-0 cursor-pointer"
+              aria-current={isActive ? 'true' : undefined}
             >
               {editingId === conv.id ? (
                 <input
@@ -107,36 +102,33 @@ export function ConversationList({ searchQuery }: Props) {
                     }
                   }}
                   onBlur={() => commitRename(conv.id)}
-                  className="w-full bg-transparent text-[13px] outline-none border-b"
-                  style={{
-                    color: 'var(--color-text)',
-                    borderColor: 'var(--color-accent)',
-                  }}
+                  className="w-full bg-transparent text-[14px] leading-5 outline-none border-b-2"
+                  style={{ color: 'var(--strip-text)', borderColor: 'var(--strip-text)' }}
                 />
               ) : (
                 <div
-                  className="text-[13px] truncate"
+                  className="text-[14px] leading-5 truncate"
                   style={{
-                    color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                    fontWeight: isActive ? 500 : 400,
+                    color: isActive ? 'var(--strip-text)' : 'var(--strip-muted)',
+                    fontWeight: isActive ? 700 : 400,
                   }}
                 >
                   {conv.title}
                 </div>
               )}
-              <div className="text-[10px] mt-0.5 hw-mono" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="tn-mono text-[11px] leading-4" style={{ color: 'var(--strip-muted)' }}>
                 {formatRelativeTime(conv.updatedAt)}
               </div>
             </button>
             {editingId === conv.id ? (
-              <div className="flex items-center mr-1">
+              <div className="flex items-center">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     commitRename(conv.id);
                   }}
-                  className="p-1 rounded cursor-pointer"
-                  style={{ color: 'var(--color-accent)' }}
+                  className="tn-strip-icon"
+                  style={{ color: 'var(--strip-text)' }}
                   title="Save title"
                 >
                   <Check size={13} />
@@ -146,24 +138,20 @@ export function ConversationList({ searchQuery }: Props) {
                     e.stopPropagation();
                     setEditingId(null);
                   }}
-                  className="p-1 rounded cursor-pointer"
-                  style={{ color: 'var(--color-text-tertiary)' }}
+                  className="tn-strip-icon"
                   title="Cancel"
                 >
                   <X size={13} />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center mr-1">
+              <div className="flex items-center">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     startRename(conv.id, conv.title);
                   }}
-                  className="p-1.5 rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity cursor-pointer"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-tertiary)')}
+                  className={ROW_ACTION}
                   title="Rename conversation"
                 >
                   <Pencil size={12} />
@@ -174,12 +162,7 @@ export function ConversationList({ searchQuery }: Props) {
                     deleteConversation(conv.id);
                   }}
                   disabled={isStreaming}
-                  className="p-1.5 rounded opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                  onMouseEnter={(e) => {
-                    if (!isStreaming) e.currentTarget.style.color = 'var(--color-error)';
-                  }}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-tertiary)')}
+                  className={`${ROW_ACTION} disabled:opacity-30`}
                   title={
                     isStreaming
                       ? 'Stop generating before deleting this conversation'

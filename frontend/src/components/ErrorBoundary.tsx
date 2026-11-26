@@ -1,6 +1,6 @@
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
-import { AlertTriangle, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -29,23 +29,16 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center h-full p-8" style={{ background: 'var(--color-bg)' }}>
-          <div className="text-center max-w-sm">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{ background: 'rgba(220,38,38,0.1)', color: 'var(--color-error)' }}
-            >
-              <AlertTriangle size={24} />
-            </div>
-            <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
+          <div role="alert" className="tn-panel tn-rule-fail w-full max-w-md px-6 py-5">
+            <h2 className="text-[20px] leading-7 font-bold mb-2" style={{ color: 'var(--color-text)' }}>
               Something went wrong
             </h2>
-            <p className="text-sm mb-4" style={{ color: 'var(--color-text-secondary)' }}>
+            <p className="tn-mono text-[13px] leading-5 mb-5 break-words" style={{ color: 'var(--color-text-secondary)' }}>
               {this.state.error?.message || 'An unexpected error occurred.'}
             </p>
             <button
               onClick={() => this.setState({ hasError: false, error: null })}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
+              className="tn-btn tn-btn-primary"
             >
               <RotateCcw size={14} />
               Try again

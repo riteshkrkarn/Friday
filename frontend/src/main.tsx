@@ -1,6 +1,7 @@
 // Must stay the first import: fills in crypto.randomUUID before any module uses it.
 import './lib/polyfills';
-import '@fontsource-variable/geist';
+import '@fontsource-variable/archivo';
+import '@fontsource-variable/jetbrains-mono';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';

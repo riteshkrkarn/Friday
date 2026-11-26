@@ -218,6 +218,10 @@ interface AppState {
   // System panel
   systemPanelOpen: boolean;
 
+  // Backend health (written by Layout's /health poll; null until the first check)
+  apiReachable: boolean | null;
+  setApiReachable: (reachable: boolean | null) => void;
+
   // Opt-in sharing
   optInEnabled: boolean;
   optInDisplayName: string;
@@ -335,7 +339,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
     commandPaletteOpen: false,
     sidebarOpen: true,
-    systemPanelOpen: true,
+    systemPanelOpen:
+      typeof window !== 'undefined' && window.matchMedia
+        ? window.matchMedia('(min-width: 1024px)').matches
+        : true,
+    apiReachable: null,
 
     optInEnabled: localStorage.getItem(OPTIN_KEY) === 'true',
     optInDisplayName: localStorage.getItem(OPTIN_NAME_KEY) || '',
@@ -613,6 +621,7 @@ export const useAppStore = create<AppState>((set, get) => {
     setSidebarOpen: (open: boolean) => set({ sidebarOpen: open }),
     toggleSystemPanel: () => set((s) => ({ systemPanelOpen: !s.systemPanelOpen })),
     setSystemPanelOpen: (open: boolean) => set({ systemPanelOpen: open }),
+    setApiReachable: (reachable: boolean | null) => set({ apiReachable: reachable }),
 
     // ── Agents ─────────────────────────────────────────────────────
 
