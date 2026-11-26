@@ -6,7 +6,7 @@ import { StreamingDots } from './StreamingDots';
 import { useAppStore } from '../../lib/store';
 import { shouldAutoplayFinishedReply, useTtsStore } from '../../lib/tts';
 import { stripThinkTags } from '../../lib/message-text';
-import { Sparkles, PanelRightOpen, PanelRightClose, Database, MessageSquare, X, CalendarCheck2 } from 'lucide-react';
+import { Sparkles, PanelRightOpen, PanelRightClose, Database, MessageSquare, X, CalendarCheck2, Rocket } from 'lucide-react';
 import { listConnectors } from '../../lib/connectors-api';
 
 function getGreeting(): string {
@@ -239,6 +239,18 @@ export function ChatArea() {
               >
                 <MessageSquare size={14} style={{ color: 'var(--color-accent-purple)' }} />
                 Messaging Channels
+              </button>
+              <button
+                onClick={() => navigate('/get-started')}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
+                <Rocket size={14} style={{ color: 'var(--color-accent)' }} />
+                Feature Walkthrough
               </button>
             </div>
           </div>

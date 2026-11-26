@@ -62,7 +62,7 @@ export function Sidebar() {
     { path: '/dashboard', icon: BarChart3, label: 'Overview' },
     { path: '/logs', icon: ScrollText, label: 'Logs' },
     { path: '/settings', icon: Settings, label: 'Settings' },
-    { path: '/get-started', icon: Rocket, label: 'Get Started' },
+    { path: '/get-started', icon: Rocket, label: 'Walkthrough' },
   ];
 
   const activeModelName = deepResearch

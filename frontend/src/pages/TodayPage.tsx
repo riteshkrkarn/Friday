@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Sun,
@@ -20,6 +20,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiFetch } from '../lib/api';
 
 type ItemType = 'hackathon' | 'project' | 'task' | 'achievement';
 type ItemStatus = 'open' | 'done';
@@ -45,53 +46,6 @@ interface LearnedRule {
 
 const STORAGE_ITEMS_KEY = 'friday-items-v1';
 const STORAGE_RULES_KEY = 'friday-rules-v1';
-
-const DEFAULT_ITEMS: FridayItem[] = [
-  {
-    id: 'demo-1',
-    title: 'AI Agents Hackathon — Final Demo & Submission',
-    type: 'hackathon',
-    dueDate: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-    status: 'open',
-    notes: 'Record 2-minute walkthrough and polish README.',
-    createdAt: new Date().toISOString().slice(0, 10),
-  },
-  {
-    id: 'demo-2',
-    title: 'OpenJarvis Friday UI & Voice Capture',
-    type: 'project',
-    dueDate: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10),
-    status: 'open',
-    notes: 'Test Right Ctrl double-tap + Whisper latency.',
-    createdAt: new Date().toISOString().slice(0, 10),
-  },
-  {
-    id: 'demo-3',
-    title: 'Regional Systems Buildathon — Runner Up',
-    type: 'achievement',
-    status: 'done',
-    portfolioUpdated: false,
-    notes: 'Completed — pending resume & portfolio update.',
-    createdAt: new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10),
-  },
-];
-
-const DEFAULT_RULES: LearnedRule[] = [
-  {
-    id: 'rule-1',
-    pattern: 'You often capture hackathon deadlines on Monday mornings.',
-    proposal: 'Send a Monday 9:00 AM digest of upcoming hackathons & open tasks?',
-    repeats: 3,
-    state: 'pending',
-  },
-  {
-    id: 'rule-2',
-    pattern: 'You ask for a resume bullet after finishing a project.',
-    proposal: 'Automatically draft a resume & portfolio summary when an item is marked Done?',
-    repeats: 3,
-    state: 'pending',
-  },
-];
 
 const TYPE_META: Record<ItemType, { label: string; icon: typeof Flame; color: string; bg: string }> = {
   hackathon: {
@@ -120,21 +74,28 @@ const TYPE_META: Record<ItemType, { label: string; icon: typeof Flame; color: st
   },
 };
 
+const DEMO_IDS = new Set(['demo-1', 'demo-2', 'demo-3']);
+const DEMO_RULE_IDS = new Set(['rule-1', 'rule-2']);
+
 function loadItems(): FridayItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_ITEMS_KEY);
-    return raw ? (JSON.parse(raw) as FridayItem[]) : DEFAULT_ITEMS;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as FridayItem[];
+    return parsed.filter((it) => !DEMO_IDS.has(it.id));
   } catch {
-    return DEFAULT_ITEMS;
+    return [];
   }
 }
 
 function loadRules(): LearnedRule[] {
   try {
     const raw = localStorage.getItem(STORAGE_RULES_KEY);
-    return raw ? (JSON.parse(raw) as LearnedRule[]) : DEFAULT_RULES;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LearnedRule[];
+    return parsed.filter((r) => !DEMO_RULE_IDS.has(r.id));
   } catch {
-    return DEFAULT_RULES;
+    return [];
   }
 }
 
@@ -177,12 +138,70 @@ export function TodayPage() {
     } catch {}
   };
 
-  const handleAddItem = (e: React.FormEvent) => {
+  // Sync with backend ItemStore and RepetitionStore on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch('/v1/items');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data.items)) {
+            const mapped: FridayItem[] = data.items.map((it: Record<string, unknown>) => ({
+              id: String(it.id ?? ''),
+              title: String(it.title ?? ''),
+              type: (['hackathon', 'project', 'task', 'achievement'].includes(String(it.item_type))
+                ? String(it.item_type)
+                : 'task') as ItemType,
+              dueDate: typeof it.due_date === 'string' && it.due_date ? it.due_date : undefined,
+              status: it.status === 'done' ? 'done' : 'open',
+              portfolioUpdated: typeof it.needs_update === 'boolean' ? !it.needs_update : undefined,
+              notes: typeof it.notes === 'string' && it.notes ? it.notes : undefined,
+              createdAt: typeof it.created_at === 'string' ? it.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+            }));
+            persistItems(mapped);
+          }
+        }
+      } catch {
+        // Offline / server unavailable — keep local items
+      }
+
+      try {
+        const res = await apiFetch('/v1/repetitions/rules');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data.rules)) {
+            const mapped: LearnedRule[] = data.rules.map((r: Record<string, unknown>) => ({
+              id: String(r.id ?? ''),
+              pattern: String(r.label ?? r.action_key ?? ''),
+              proposal: String(r.proposal_text ?? ''),
+              repeats: Number(r.count ?? 0),
+              state:
+                r.status === 'accepted'
+                  ? 'accepted'
+                  : r.status === 'rejected'
+                    ? 'dismissed'
+                    : 'pending',
+            }));
+            persistRules(mapped);
+          }
+        }
+      } catch {
+        // Offline / server unavailable — keep local rules
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const title = newTitle.trim();
     if (!title) return;
+    const tempId = `item-${Date.now()}`;
     const item: FridayItem = {
-      id: `item-${Date.now()}`,
+      id: tempId,
       title,
       type: newType,
       dueDate: newDue || undefined,
@@ -194,13 +213,40 @@ export function TodayPage() {
     setNewTitle('');
     setNewDue('');
     toast.success(`Saved ${TYPE_META[newType].label.toLowerCase()}: "${title}"`);
+
+    try {
+      const res = await apiFetch('/v1/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          item_type: newType,
+          due_date: newDue || null,
+          status: item.status,
+          needs_update: newType === 'achievement' ? true : undefined,
+        }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        if (created?.id) {
+          persistItems([
+            { ...item, id: String(created.id) },
+            ...items,
+          ]);
+        }
+      }
+    } catch {
+      // Keep local item if backend is unreachable
+    }
   };
 
-  const toggleItemStatus = (id: string) => {
+  const toggleItemStatus = async (id: string) => {
+    const current = items.find((it) => it.id === id);
+    if (!current) return;
+    const nextStatus: ItemStatus = current.status === 'open' ? 'done' : 'open';
     persistItems(
       items.map((it) => {
         if (it.id !== id) return it;
-        const nextStatus: ItemStatus = it.status === 'open' ? 'done' : 'open';
         return {
           ...it,
           status: nextStatus,
@@ -211,22 +257,52 @@ export function TodayPage() {
         };
       }),
     );
+    try {
+      await apiFetch(`/v1/items/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: nextStatus,
+          needs_update:
+            nextStatus === 'done' && (current.type === 'project' || current.type === 'achievement' || current.type === 'hackathon')
+              ? current.portfolioUpdated === false
+              : undefined,
+        }),
+      });
+    } catch {}
   };
 
-  const markPortfolioUpdated = (id: string) => {
+  const markPortfolioUpdated = async (id: string) => {
     persistItems(
       items.map((it) => (it.id === id ? { ...it, portfolioUpdated: true } : it)),
     );
     toast.success('Marked resume & portfolio as updated');
+    try {
+      await apiFetch(`/v1/items/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ needs_update: false }),
+      });
+    } catch {}
   };
 
-  const deleteItem = (id: string) => {
+  const deleteItem = async (id: string) => {
     persistItems(items.filter((it) => it.id !== id));
+    try {
+      await apiFetch(`/v1/items/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch {}
   };
 
-  const updateRule = (id: string, state: 'accepted' | 'dismissed') => {
+  const updateRule = async (id: string, state: 'accepted' | 'dismissed') => {
     persistRules(rules.map((r) => (r.id === id ? { ...r, state } : r)));
     toast.success(state === 'accepted' ? 'Rule enabled' : 'Rule dismissed');
+    try {
+      await apiFetch(`/v1/repetitions/rules/${encodeURIComponent(id)}/decide`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision: state === 'accepted' ? 'accept' : 'reject' }),
+      });
+    } catch {}
   };
 
   const filteredItems = useMemo(() => {

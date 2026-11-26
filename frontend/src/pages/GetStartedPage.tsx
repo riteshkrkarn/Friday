@@ -2,11 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Sparkles,
-  Download,
   Terminal,
   Globe,
-  Monitor,
-  Apple,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -15,92 +12,121 @@ import {
   CheckCircle2,
   MessageSquare,
   ArrowRight,
+  ArrowLeft,
+  CalendarCheck2,
+  Mic,
+  Bell,
+  Repeat,
+  Bot,
+  BarChart3,
+  Settings,
+  Database,
 } from 'lucide-react';
 import { isTauri, checkHealth } from '../lib/api';
 
-const GITHUB_BASE =
-  'https://github.com/open-jarvis/OpenJarvis/releases/latest/download';
-
-interface Platform {
+interface WalkthroughStep {
   id: string;
-  label: string;
-  shortLabel: string;
-  file: string;
-  icon: typeof Apple;
+  title: string;
+  subtitle: string;
+  description: string;
+  highlights: string[];
+  actionLabel: string;
+  actionPath: string;
+  icon: typeof MessageSquare;
 }
 
-const PLATFORMS: Platform[] = [
+const WALKTHROUGH_STEPS: WalkthroughStep[] = [
   {
-    id: 'mac-arm',
-    label: 'macOS (Apple Silicon)',
-    shortLabel: 'macOS (Apple Silicon)',
-    file: 'OpenJarvis_universal.dmg',
-    icon: Apple,
+    id: 'chat',
+    title: 'Chat & Multi-Model Routing',
+    subtitle: 'Local Ollama, NVIDIA NIM, Groq, OpenAI, Anthropic, or Gemini',
+    description:
+      'Chat with Friday using any local or cloud model. Switch models on the fly with Cmd/Ctrl+K, toggle Deep Research for multi-step web synthesis, and inspect latency, token budgets, and energy usage in each reply footer.',
+    highlights: [
+      'Model switcher (Cmd/Ctrl+K) across local and cloud providers',
+      'Built-in tools: Web Search, Calculator, Code Interpreter, File Read, Item Store',
+      'Smart auto-named chat history with inline rename & delete',
+    ],
+    actionLabel: 'Open Chat',
+    actionPath: '/',
+    icon: MessageSquare,
   },
   {
-    id: 'mac-intel',
-    label: 'macOS (Intel)',
-    shortLabel: 'macOS (Intel)',
-    file: 'OpenJarvis_universal.dmg',
-    icon: Apple,
+    id: 'capture',
+    title: 'Quick Capture (Voice, Hotkey & Telegram)',
+    subtitle: 'Log hackathons, projects, tasks, and achievements in seconds',
+    description:
+      'Never lose an idea or deadline. Capture raw voice or text notes and Friday automatically extracts a clean title, category (hackathon, project, task, achievement), due date, and notes.',
+    highlights: [
+      'Global hotkey: double-tap Right Ctrl for instant voice capture',
+      'Web capture bar in Today & Brief with type and due date',
+      'Telegram fallback: send /capture <note> from anywhere',
+    ],
+    actionLabel: 'Try Quick Capture',
+    actionPath: '/today',
+    icon: Mic,
   },
   {
-    id: 'windows',
-    label: 'Windows (64-bit)',
-    shortLabel: 'Windows (64-bit)',
-    file: 'OpenJarvis_x64-setup.exe',
-    icon: Monitor,
+    id: 'brief',
+    title: 'Today & Morning Brief',
+    subtitle: 'Overdue alerts, upcoming deadlines, and portfolio tracking',
+    description:
+      'Start every day with a focused briefing built strictly from your saved items. Friday surfaces overdue items first, followed by upcoming deadlines, open tasks, and completed wins waiting for a resume or portfolio update.',
+    highlights: [
+      'Filterable Item Store for Hackathons, Projects, Tasks, and Achievements',
+      'Tracks completed wins that still need a resume/portfolio update',
+      'One-click "Discuss in Chat" to plan your day with Friday',
+    ],
+    actionLabel: 'Open Today & Brief',
+    actionPath: '/today',
+    icon: CalendarCheck2,
   },
   {
-    id: 'linux-deb',
-    label: 'Linux (DEB)',
-    shortLabel: 'Linux (DEB)',
-    file: 'OpenJarvis_amd64.deb',
-    icon: Terminal,
+    id: 'reminders',
+    title: 'Daily Reminders & Channels',
+    subtitle: 'Email, Telegram, and Web UI notifications',
+    description:
+      'Friday runs scheduled daily deadline scans and 14-day portfolio/resume update nudges, delivering alerts in order: Email, then Telegram, then Web UI.',
+    highlights: [
+      '24-hour deduplication so you are never spammed for the same item',
+      'Configurable lead time and delivery channels in Data Sources',
+      'Works both in the Web UI and via Telegram bot commands',
+    ],
+    actionLabel: 'Configure Channels',
+    actionPath: '/data-sources',
+    icon: Bell,
   },
   {
-    id: 'linux-rpm',
-    label: 'Linux (RPM)',
-    shortLabel: 'Linux (RPM)',
-    file: 'OpenJarvis_x86_64.rpm',
-    icon: Terminal,
+    id: 'learning',
+    title: 'Repetition Learning & Shortcuts',
+    subtitle: 'Turn repeated habits into one-tap automations',
+    description:
+      'When Friday notices you repeating an action—like logging hackathon deadlines every Monday or drafting resume bullets after finishing projects—it proposes a shortcut or scheduled rule for your approval.',
+    highlights: [
+      'Confirmation-gated: Friday never enables a rule without your consent',
+      'Accept, customize, or dismiss proposals right from Today & Brief',
+      'Learns your personal workflow without manual rule writing',
+    ],
+    actionLabel: 'View Learned Rules',
+    actionPath: '/today',
+    icon: Repeat,
+  },
+  {
+    id: 'workspace',
+    title: 'Agents, Overview & Settings',
+    subtitle: 'Monitor performance, manage API keys, and run custom agents',
+    description:
+      'Create specialized or scheduled agents, connect local folders as knowledge sources, monitor token cost and energy telemetry, and manage your local or cloud API keys.',
+    highlights: [
+      'Agents (/agents): build and schedule autonomous workflows',
+      'Overview (/dashboard): track energy, cost savings, and traces',
+      'Settings (/settings): configure NVIDIA NIM, Groq, Ollama, and voice',
+    ],
+    actionLabel: 'Open Settings',
+    actionPath: '/settings',
+    icon: Bot,
   },
 ];
-
-type DeployContext = 'hosted' | 'desktop' | 'selfhosted';
-
-function detectContext(): DeployContext {
-  if (isTauri()) return 'desktop';
-  const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
-    return 'selfhosted';
-  }
-  return 'hosted';
-}
-
-function detectPlatform(): string {
-  const ua = navigator.userAgent.toLowerCase();
-  const platform = navigator.platform?.toLowerCase() || '';
-
-  if (platform.includes('mac') || ua.includes('macintosh')) {
-    try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl');
-      if (gl) {
-        const ext = gl.getExtension('WEBGL_debug_renderer_info');
-        if (ext) {
-          const renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
-          if (renderer && /apple m/i.test(renderer)) return 'mac-arm';
-        }
-      }
-    } catch {}
-    return 'mac-arm';
-  }
-  if (platform.includes('win') || ua.includes('windows')) return 'windows';
-  if (ua.includes('ubuntu') || ua.includes('debian')) return 'linux-deb';
-  if (ua.includes('linux')) return 'linux-deb';
-  return 'mac-arm';
-}
 
 function CodeBlock({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -119,8 +145,8 @@ function CodeBlock({ code }: { code: string }) {
       <pre className="whitespace-pre-wrap break-all">{code}</pre>
       <button
         onClick={handleCopy}
-        className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-        style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)' }}
+        className="absolute top-2.5 right-2.5 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)' }}
         title="Copy"
       >
         {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -132,46 +158,42 @@ function CodeBlock({ code }: { code: string }) {
 function Section({
   icon: Icon,
   title,
-  children,
   defaultOpen = false,
+  children,
 }: {
   icon: typeof Terminal;
   title: string;
-  children: React.ReactNode;
   defaultOpen?: boolean;
+  children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const Chevron = open ? ChevronDown : ChevronRight;
 
   return (
     <div
       className="rounded-xl overflow-hidden"
-      style={{ border: '1px solid var(--color-border)' }}
+      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
     >
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-3 w-full px-5 py-4 text-left cursor-pointer transition-colors"
-        style={{ background: open ? 'var(--color-bg-secondary)' : 'var(--color-surface)' }}
-        onMouseEnter={(e) => {
-          if (!open) e.currentTarget.style.background = 'var(--color-bg-secondary)';
-        }}
-        onMouseLeave={(e) => {
-          if (!open) e.currentTarget.style.background = 'var(--color-surface)';
-        }}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer transition-colors"
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-secondary)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
       >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-        >
-          <Icon size={16} />
-        </div>
+        <Icon size={18} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
         <span className="text-sm font-medium flex-1" style={{ color: 'var(--color-text)' }}>
           {title}
         </span>
-        <Chevron size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+        {open ? (
+          <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+        ) : (
+          <ChevronRight size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+        )}
       </button>
       {open && (
-        <div className="px-5 pb-5 pt-3 flex flex-col gap-3" style={{ background: 'var(--color-surface)' }}>
+        <div
+          className="px-5 pb-5 pt-1 flex flex-col gap-3"
+          style={{ borderTop: '1px solid var(--color-border-subtle)' }}
+        >
           {children}
         </div>
       )}
@@ -179,306 +201,242 @@ function Section({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Hosted view: visitor on a deployed website
-// ---------------------------------------------------------------------------
-function HostedView() {
+export function GetStartedPage() {
   const navigate = useNavigate();
+  const [stepIdx, setStepIdx] = useState(0);
   const [healthy, setHealthy] = useState<boolean | null>(null);
+  const isDesktop = useMemo(() => isTauri(), []);
 
   useEffect(() => {
     checkHealth().then(setHealthy);
   }, []);
 
-  return (
-    <div className="text-center mb-14">
-      <div
-        className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
-        style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-      >
-        <Sparkles size={32} />
-      </div>
-      <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
-        OpenJarvis
-      </h1>
-      <p
-        className="text-sm mb-6 leading-relaxed max-w-md mx-auto"
-        style={{ color: 'var(--color-text-secondary)' }}
-      >
-        Private AI that runs on your hardware. Chat, tools, agents, and
-        energy profiling &mdash; no cloud required.
-      </p>
-
-      {healthy === true && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-accent)' }}>
-            <CheckCircle2 size={16} />
-            <span>Server is running</span>
-          </div>
-          <button
-            onClick={() => navigate('/')}
-            className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-medium transition-opacity cursor-pointer"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <MessageSquare size={18} />
-            Start Chatting
-            <ArrowRight size={16} />
-          </button>
-        </div>
-      )}
-
-      {healthy === false && (
-        <div
-          className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm"
-          style={{ background: 'color-mix(in srgb, var(--color-error) 10%, transparent)', color: 'var(--color-error)' }}
-        >
-          Server is not responding. The backend may be starting up.
-        </div>
-      )}
-
-      {healthy === null && (
-        <div className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-          Checking server...
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Desktop view: running in the Tauri app
-// ---------------------------------------------------------------------------
-function DesktopView() {
-  const navigate = useNavigate();
-
-  return (
-    <>
-      <div className="text-center mb-14">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
-          style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-        >
-          <Sparkles size={32} />
-        </div>
-        <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
-          OpenJarvis Desktop
-        </h1>
-        <p
-          className="text-sm mb-4 leading-relaxed max-w-md mx-auto"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          Your local AI is ready. Everything runs on your device &mdash; no
-          data leaves your machine.
-        </p>
-        <span
-          className="inline-block text-[11px] font-mono px-2.5 py-1 rounded-full"
-          style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
-        >
-          v2.8
-        </span>
-      </div>
-
-      <div
-        className="rounded-xl p-6 mb-8 text-center"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-      >
-        <div className="flex items-center justify-center gap-2 mb-2" style={{ color: 'var(--color-accent)' }}>
-          <CheckCircle2 size={18} />
-          <span className="text-sm font-medium">All systems running</span>
-        </div>
-        <p className="text-xs mb-5" style={{ color: 'var(--color-text-tertiary)' }}>
-          Ollama inference engine, API server, and AI model are active.
-        </p>
-        <button
-          onClick={() => navigate('/')}
-          className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-medium transition-opacity cursor-pointer"
-          style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-        >
-          <MessageSquare size={18} />
-          Start Chatting
-          <ArrowRight size={16} />
-        </button>
-      </div>
-
-      <div className="flex flex-col gap-3 mb-8">
-        <Section icon={Cpu} title="Keyboard Shortcuts" defaultOpen>
-          <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd+K</kbd> Model picker</div>
-            <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd+I</kbd> System panel</div>
-            <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd+N</kbd> New chat</div>
-          </div>
-        </Section>
-      </div>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Self-hosted view: running on localhost (manual setup)
-// ---------------------------------------------------------------------------
-function SelfHostedView() {
-  const detectedId = useMemo(() => detectPlatform(), []);
-  const primary = PLATFORMS.find((p) => p.id === detectedId) || PLATFORMS[0];
-  const others = PLATFORMS.filter((p) => p.id !== primary.id);
-
-  return (
-    <>
-      {/* Hero */}
-      <div className="text-center mb-14">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
-          style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-        >
-          <Sparkles size={32} />
-        </div>
-        <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--color-text)' }}>
-          OpenJarvis
-        </h1>
-        <p
-          className="text-sm mb-4 leading-relaxed max-w-md mx-auto"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          Private AI that runs on your hardware. Chat, tools, agents, and
-          energy profiling &mdash; no cloud required.
-        </p>
-        <span
-          className="inline-block text-[11px] font-mono px-2.5 py-1 rounded-full"
-          style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text-tertiary)' }}
-        >
-          v2.8
-        </span>
-      </div>
-
-      {/* Desktop Download */}
-      <div className="mb-10">
-        <div
-          className="rounded-xl p-8 text-center"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <Monitor size={18} style={{ color: 'var(--color-text-secondary)' }} />
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-              Desktop App
-            </h2>
-          </div>
-          <p className="text-xs mb-6" style={{ color: 'var(--color-text-tertiary)' }}>
-            One-click install. Bundles Ollama and the server &mdash; no setup required.
-          </p>
-
-          <a
-            href={`${GITHUB_BASE}/${primary.file}`}
-            className="inline-flex items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-medium transition-opacity cursor-pointer"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <Download size={18} />
-            Download for {primary.label}
-          </a>
-
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-            <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-              Or
-            </span>
-            {others.map((p) => (
-              <a
-                key={p.id}
-                href={`${GITHUB_BASE}/${p.file}`}
-                className="text-[11px] underline underline-offset-2 transition-colors"
-                style={{ color: 'var(--color-text-secondary)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-accent)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-              >
-                {p.shortLabel}
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* CLI + Browser sections */}
-      <div className="flex flex-col gap-3 mb-10">
-        <Section icon={Terminal} title="Command Line (macOS / Linux)" defaultOpen>
-          <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            Clone and install (Python 3.10+ required):
-          </p>
-          <CodeBlock code={"git clone https://github.com/open-jarvis/OpenJarvis.git\ncd OpenJarvis\nuv sync"} />
-          <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-            Then get started:
-          </p>
-          <CodeBlock code={"jarvis init\njarvis doctor\njarvis chat"} />
-        </Section>
-
-        <Section icon={Globe} title="Browser App (Self-Hosted)">
-          <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            Launch the API server to get the full UI in your browser:
-          </p>
-          <CodeBlock code={"git clone https://github.com/open-jarvis/OpenJarvis.git\ncd OpenJarvis\nuv sync --extra desktop\njarvis serve --port 8000"} />
-          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            The chat, dashboard, energy profiling, and cost comparison all run
-            locally on your machine.
-          </p>
-        </Section>
-
-        <Section icon={Globe} title="Docker (Cloud / VPS Deploy)">
-          <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            Deploy with Docker Compose for a zero-setup hosted instance:
-          </p>
-          <CodeBlock code={"git clone https://github.com/open-jarvis/OpenJarvis.git\ncd OpenJarvis\ndocker compose -f deploy/docker/docker-compose.yml up -d"} />
-          <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-            This starts both the API server and Ollama. The web UI is bundled and
-            served automatically at port 8000.
-          </p>
-        </Section>
-      </div>
-
-      {/* System Requirements */}
-      <div
-        className="rounded-xl px-6 py-5"
-        style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <Cpu size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-          <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-tertiary)' }}>
-            System Requirements
-          </h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-          <div>
-            <div className="font-medium mb-0.5" style={{ color: 'var(--color-text)' }}>Desktop App</div>
-            No prerequisites &mdash; everything is bundled
-          </div>
-          <div>
-            <div className="font-medium mb-0.5" style={{ color: 'var(--color-text)' }}>CLI / Self-Hosted</div>
-            Python 3.10+ and an inference engine (Ollama recommended)
-          </div>
-          <div>
-            <div className="font-medium mb-0.5" style={{ color: 'var(--color-text)' }}>Memory</div>
-            8 GB+ RAM recommended
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main page — delegates to the context-appropriate view
-// ---------------------------------------------------------------------------
-
-export function GetStartedPage() {
-  const context = useMemo(detectContext, []);
+  const step = WALKTHROUGH_STEPS[stepIdx];
+  const StepIcon = step.icon;
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-6 py-16">
-        {context === 'hosted' && <HostedView />}
-        {context === 'desktop' && <DesktopView />}
-        {context === 'selfhosted' && <SelfHostedView />}
+      <div className="max-w-4xl mx-auto px-6 py-10 flex flex-col gap-8">
+        {/* Header */}
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <div>
+            <div className="flex items-center gap-2 text-xs font-medium mb-1" style={{ color: 'var(--color-accent)' }}>
+              <Sparkles size={14} />
+              <span>Friday Walkthrough</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--color-text)' }}>
+              Everything Friday can do
+            </h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+              Step through Friday&apos;s core workflows or jump straight to any workspace.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            {healthy === true && (
+              <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
+                <CheckCircle2 size={13} />
+                Server online
+              </span>
+            )}
+            <button
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity hover:opacity-90"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
+            >
+              <MessageSquare size={15} />
+              Open Chat
+            </button>
+          </div>
+        </header>
+
+        {/* Interactive Step-by-Step Walkthrough */}
+        <section
+          className="rounded-xl p-6 flex flex-col gap-5"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        >
+          {/* Step pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {WALKTHROUGH_STEPS.map((s, idx) => {
+              const active = idx === stepIdx;
+              const PillIcon = s.icon;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setStepIdx(idx)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors"
+                  style={{
+                    background: active ? 'var(--color-accent-subtle)' : 'var(--color-bg)',
+                    color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                    border: active
+                      ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)'
+                      : '1px solid var(--color-border)',
+                  }}
+                >
+                  <PillIcon size={13} />
+                  <span>{idx + 1}. {s.title.split('&')[0].trim()}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active step card */}
+          <div
+            className="rounded-xl p-5 flex flex-col gap-4"
+            style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border-subtle)' }}
+          >
+            <div className="flex items-start gap-3.5">
+              <div
+                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
+              >
+                <StepIcon size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-mono uppercase tracking-wider mb-0.5" style={{ color: 'var(--color-text-tertiary)' }}>
+                  Step {stepIdx + 1} of {WALKTHROUGH_STEPS.length}
+                </div>
+                <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {step.title}
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--color-accent)' }}>
+                  {step.subtitle}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+              {step.description}
+            </p>
+
+            <ul className="flex flex-col gap-2">
+              {step.highlights.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
+                  <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--color-accent)' }} />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
+                  disabled={stepIdx === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                  Previous
+                </button>
+                <button
+                  onClick={() => setStepIdx((i) => Math.min(WALKTHROUGH_STEPS.length - 1, i + 1))}
+                  disabled={stepIdx === WALKTHROUGH_STEPS.length - 1}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border)',
+                  }}
+                >
+                  Next
+                  <ArrowRight size={13} />
+                </button>
+              </div>
+
+              <button
+                onClick={() => navigate(step.actionPath)}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-opacity hover:opacity-90"
+                style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
+              >
+                {step.actionLabel}
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Quick Workspace Map */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { icon: MessageSquare, label: 'Chat', desc: 'Talk to Friday, run tools & Deep Research', path: '/' },
+            { icon: CalendarCheck2, label: 'Today & Brief', desc: 'Morning brief, Item Store & learned rules', path: '/today' },
+            { icon: Database, label: 'Data Sources', desc: 'Local folders, Email & Telegram channels', path: '/data-sources' },
+            { icon: BarChart3, label: 'Overview', desc: 'Energy, cost savings & execution traces', path: '/dashboard' },
+          ].map((card) => {
+            const CardIcon = card.icon;
+            return (
+              <button
+                key={card.path}
+                onClick={() => navigate(card.path)}
+                className="text-left p-4 rounded-xl flex flex-col gap-1.5 cursor-pointer transition-colors"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+              >
+                <CardIcon size={16} style={{ color: 'var(--color-accent)' }} />
+                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                  {card.label}
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                  {card.desc}
+                </p>
+              </button>
+            );
+          })}
+        </section>
+
+        {/* Shortcuts & Setup Reference */}
+        <div className="flex flex-col gap-3">
+          <Section icon={Cpu} title="Keyboard Shortcuts" defaultOpen>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd/Ctrl+K</kbd> Switch model</div>
+              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Right Ctrl ×2</kbd> Voice Quick Capture</div>
+              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd/Ctrl+I</kbd> Toggle System panel</div>
+              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd/Ctrl+N</kbd> New chat</div>
+            </div>
+          </Section>
+
+          {!isDesktop && (
+            <Section icon={Terminal} title="CLI & Self-Hosted Commands">
+              <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                Start the Friday API server and Web UI locally:
+              </p>
+              <CodeBlock code={'jarvis serve --port 8000'} />
+              <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                Run diagnostics or start the interactive CLI:
+              </p>
+              <CodeBlock code={'jarvis doctor\njarvis chat'} />
+            </Section>
+          )}
+
+          <Section icon={Settings} title="Cloud Keys & Environment">
+            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              Configure NVIDIA NIM, Groq, OpenAI, Anthropic, Gemini, Email SMTP, or Telegram tokens in Settings or your `.env` file.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/settings')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+              >
+                Open Settings <ArrowRight size={12} />
+              </button>
+            </div>
+          </Section>
+
+          {!isDesktop && (
+            <Section icon={Globe} title="Telegram Bot Commands">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                <div><code className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>/capture &lt;note&gt;</code> Save an item</div>
+                <div><code className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>/brief</code> Get morning briefing</div>
+              </div>
+            </Section>
+          )}
+        </div>
       </div>
     </div>
   );
