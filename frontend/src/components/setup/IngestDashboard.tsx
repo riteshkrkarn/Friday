@@ -24,7 +24,7 @@ function ProgressRow({
         : 0;
 
   return (
-    <div className="flex flex-col gap-1.5 p-4 rounded-xl"
+    <div className="flex flex-col gap-1.5 p-4 rounded-sm"
       style={{
         background: 'var(--color-surface)',
         border: '1px solid var(--color-border)',
@@ -61,11 +61,11 @@ function ProgressRow({
         </div>
       </div>
       <div
-        className="h-1.5 rounded-full overflow-hidden"
+        className="h-1.5 rounded-sm overflow-hidden"
         style={{ background: 'var(--color-bg-tertiary)' }}
       >
         <div
-          className="h-full rounded-full transition-all duration-500"
+          className="h-full rounded-sm transition-all duration-500"
           style={{
             background:
               status?.state === 'error' ? 'var(--color-error)' : 'var(--color-accent)',
@@ -159,14 +159,14 @@ export function IngestDashboard({
       <div className="pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
         <button
           onClick={onReady}
-          className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all"
+          className="w-full py-3 px-4 rounded-sm font-semibold text-sm flex items-center justify-center gap-2 transition-all"
           style={{
             background: 'var(--color-accent)',
             color: 'var(--color-on-accent)',
           }}
         >
           {!allDone && <Loader2 size={16} className="animate-spin" />}
-          Start Researching →
+          Start Researching â†’
         </button>
         {!allDone && (
           <p className="text-center text-xs mt-2" style={{ color: 'var(--color-text-tertiary)' }}>

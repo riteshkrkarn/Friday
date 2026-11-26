@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { motion } from 'motion/react';
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useAppStore } from '../lib/store';
 import {
   fetchManagedAgents,
@@ -16,15 +16,104 @@ import {
 } from '../lib/api';
 import type { ChannelBinding, ManagedAgent, MemoryStats, MemorySearchResult } from '../lib/api';
 import { getBase, isTauri, authHeaders } from '../lib/api';
-import {
-  Database, MessageSquare, Loader2, Brain, Search, FolderOpen, FileText,
-  Mail, Hash, MessageCircle, CalendarDays, Contact, StickyNote, BookText,
-  Package, Upload, Link2, PhoneCall,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { FolderOpen } from 'lucide-react';
 import { SOURCE_CATALOG } from '../types/connectors';
 import type { ConnectRequest, ConnectorMeta, SyncStatus, OAuthSetupInfo } from '../types/connectors';
 import { listConnectors, connectSource, disconnectSourceUntilComplete, getConnector, getSyncStatus, triggerSync, startServerOAuth } from '../lib/connectors-api';
+import { LineBullet, SectionHeading, Station } from '../components/transit';
+import type { StationState } from '../lib/transit-lines';
+
+// ---------------------------------------------------------------------------
+// Transit pieces local to this page
+// ---------------------------------------------------------------------------
+
+/** Vertical offset of a station from the top of its stop row (row header is 56px). */
+const STOP_Y = 21;
+
+/**
+ * One stop on a vertical line. The rail runs through the left gutter, the
+ * station sits level with the row's first line, and the content is ruled
+ * underneath so long forms below the header keep the line continuous.
+ */
+function LineStop({
+  first,
+  last,
+  rail,
+  station,
+  children,
+}: {
+  first: boolean;
+  last: boolean;
+  /** CSS colour of the rail. */
+  rail: string;
+  station: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <li className="relative" style={{ paddingLeft: 32 }}>
+      {!first && (
+        <span aria-hidden="true" className="absolute" style={{ left: 4.5, width: 5, top: 0, height: STOP_Y + 7, background: rail }} />
+      )}
+      {!last && (
+        <span aria-hidden="true" className="absolute" style={{ left: 4.5, width: 5, top: STOP_Y + 7, bottom: 0, background: rail }} />
+      )}
+      <span className="absolute z-[1] flex" style={{ left: 0, top: STOP_Y }}>
+        {station}
+      </span>
+      {children}
+    </li>
+  );
+}
+
+/** Small numbered list for setup instructions: the order is the information. */
+function StepList({ children }: { children: ReactNode[] }) {
+  return (
+    <ol className="flex flex-col" style={{ borderTop: '1px solid var(--color-border)' }}>
+      {children.map((child, i) => (
+        <li
+          key={i}
+          className="grid gap-3 py-2.5 text-[13px] leading-5"
+          style={{ gridTemplateColumns: '20px 1fr', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+        >
+          <span className="tn-mono text-[12px] leading-5" style={{ color: 'var(--color-text-tertiary)' }}>{i + 1}</span>
+          <div className="min-w-0">{child}</div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const linkStyle = { color: 'var(--action)', textDecoration: 'underline', textUnderlineOffset: 3 } as const;
+const hintStyle = { fontSize: 13, lineHeight: '20px', color: 'var(--color-text-secondary)', marginBottom: 12 } as const;
+
+/** A 5px line that fills from the left as a multi-stage action advances. */
+function LineFill({ fraction, color }: { fraction: number; color: string }) {
+  return (
+    <div aria-hidden="true" style={{ height: 5, background: 'var(--color-bg-tertiary)', overflow: 'hidden' }}>
+      <div
+        style={{
+          height: '100%', width: '100%', background: color,
+          transform: `scaleX(${Math.max(0, Math.min(1, fraction))})`,
+          transformOrigin: 'left center',
+          transition: 'transform 200ms ease-out',
+        }}
+      />
+    </div>
+  );
+}
+
+/** Inline failure message with the red rule over it. */
+function FailRow({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      role="alert"
+      className={`tn-rule-fail pt-2 text-[13px] leading-5 ${className}`}
+      style={{ color: 'var(--fail)', overflowWrap: 'anywhere' }}
+    >
+      {children}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Inline connect form (reused from AgentsPage pattern)
@@ -76,7 +165,7 @@ function InlineConnectForm({
   };
 
   return (
-    <div>
+    <div className="flex flex-col gap-2">
       {fields.map((f) => (
         f.type === 'select' ? (
           <select
@@ -84,14 +173,7 @@ function InlineConnectForm({
             value={inputs[f.name] || f.defaultValue || ''}
             onChange={(e) => update(f.name, e.target.value)}
             aria-label={f.placeholder}
-            style={{
-              width: '100%', padding: '7px 10px',
-              background: 'var(--color-bg)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 4, color: 'var(--color-text)',
-              fontSize: 12, marginBottom: 6,
-              boxSizing: 'border-box',
-            }}
+            className="tn-select"
           >
             {(f.options || []).map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -103,29 +185,18 @@ function InlineConnectForm({
             value={inputs[f.name] || ''}
             onChange={(e) => update(f.name, e.target.value)}
             placeholder={f.placeholder}
+            aria-label={f.placeholder}
             type={f.type || 'text'}
             required={f.required !== false}
-            style={{
-              width: '100%', padding: '7px 10px',
-              background: 'var(--color-bg)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 4, color: 'var(--color-text)',
-              fontSize: 12, marginBottom: 6,
-              boxSizing: 'border-box',
-            }}
+            className="tn-input"
           />
         )
       ))}
       <button
+        type="button"
         onClick={submit}
         disabled={submitDisabled}
-        style={{
-          width: '100%', padding: 8,
-          background: submitDisabled ? 'var(--color-disabled-bg)' : 'var(--color-accent-purple)',
-          color: 'var(--color-on-accent)', border: 'none',
-          borderRadius: 6, fontSize: 12,
-          cursor: submitDisabled ? 'default' : 'pointer',
-        }}
+        className="tn-btn tn-btn-primary self-start mt-1"
       >
         Connect
       </button>
@@ -185,20 +256,22 @@ function GenericConnectPanel({
         .map((url) => ({ url }));
       return (
         <div>
-          <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 10 }}>
+          <div style={hintStyle}>
             Add one RSS or Atom feed URL per line.
           </div>
           <textarea
             value={feedUrls}
             onChange={(event) => setFeedUrls(event.target.value)}
             placeholder={'https://example.com/feed.xml\nhttps://example.org/rss'}
+            aria-label="Feed URLs"
             rows={4}
-            style={{ width: '100%', padding: '7px 10px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 4, color: 'var(--color-text)', fontSize: 12, marginBottom: 6, boxSizing: 'border-box' }}
+            className="tn-textarea tn-mono text-[13px]"
           />
           <button
+            type="button"
             onClick={() => onConnect({ config: { feeds } })}
             disabled={loading || disabled || feeds.length === 0}
-            style={{ width: '100%', padding: 8, background: loading || disabled || feeds.length === 0 ? 'var(--color-disabled-bg)' : 'var(--color-accent-purple)', color: 'var(--color-on-accent)', border: 'none', borderRadius: 6, fontSize: 12, cursor: loading || disabled || feeds.length === 0 ? 'default' : 'pointer' }}
+            className="tn-btn tn-btn-primary mt-3"
           >
             {loading ? 'Connecting...' : 'Save feeds'}
           </button>
@@ -207,20 +280,15 @@ function GenericConnectPanel({
     }
     return (
       <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 10 }}>
+        <div style={hintStyle}>
           {displayName} reads data directly from this device. Grant access if
           prompted, then connect.
         </div>
         <button
+          type="button"
           onClick={() => onConnect({})}
           disabled={loading || disabled}
-          style={{
-            width: '100%', padding: 8,
-            background: loading || disabled ? 'var(--color-disabled-bg)' : 'var(--color-accent-purple)',
-            color: 'var(--color-on-accent)', border: 'none',
-            borderRadius: 6, fontSize: 12,
-            cursor: loading || disabled ? 'default' : 'pointer',
-          }}
+          className="tn-btn tn-btn-primary"
         >
           {loading ? 'Connecting...' : `Connect ${displayName}`}
         </button>
@@ -231,7 +299,7 @@ function GenericConnectPanel({
   if (authType === 'token') {
     return (
       <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 10 }}>
+        <div style={hintStyle}>
           Enter your {displayName} API token.
         </div>
         <InlineConnectForm
@@ -253,20 +321,15 @@ function GenericConnectPanel({
   if (oauthSetup?.has_credentials) {
     return (
       <div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 10 }}>
+        <div style={hintStyle}>
           OAuth app credentials are already configured. Continue directly to
           {oauthSetup.provider ? ` ${oauthSetup.provider}` : ' the provider'} sign-in.
         </div>
         <button
+          type="button"
           onClick={onOAuthStart}
           disabled={loading || disabled}
-          style={{
-            width: '100%', padding: 8,
-            background: loading || disabled ? 'var(--color-disabled-bg)' : 'var(--color-accent-purple)',
-            color: 'var(--color-on-accent)', border: 'none',
-            borderRadius: 6, fontSize: 12,
-            cursor: loading || disabled ? 'default' : 'pointer',
-          }}
+          className="tn-btn tn-btn-primary"
         >
           {loading ? 'Connecting...' : `Continue with ${oauthSetup.provider || displayName}`}
         </button>
@@ -277,26 +340,22 @@ function GenericConnectPanel({
   return (
     <div>
       {oauthSetup && !oauthSetup.has_credentials && (
-        <div style={{
-          background: 'var(--color-bg)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 6, padding: 10, marginBottom: 10,
-        }}>
-          <div style={{ color: 'var(--color-accent-purple)', fontSize: 10, fontWeight: 600, marginBottom: 3 }}>
-            SETUP REQUIRED
-          </div>
-          <div style={{ fontSize: 12, marginBottom: 6 }}>{oauthSetup.setup_hint}</div>
+        <div className="tn-rule-top pt-2 mb-4 text-[13px] leading-5" style={{ color: 'var(--color-text)' }}>
+          <p>
+            <strong className="font-bold">Setup required.</strong> {oauthSetup.setup_hint}
+          </p>
           <a
             href={oauthSetup.setup_url}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: 'var(--color-accent)', fontSize: 11, textDecoration: 'underline' }}
+            className="inline-block mt-1"
+            style={linkStyle}
           >
             Open developer dashboard &rarr;
           </a>
         </div>
       )}
-      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 10 }}>
+      <div style={hintStyle}>
         Paste the Client ID and Client Secret from the app you created above.
       </div>
       <InlineConnectForm
@@ -385,32 +444,13 @@ function UploadForm({ onDone }: { onDone?: () => void }) {
     }
   };
 
-  const tabStyle = (active: boolean): React.CSSProperties => ({
-    flex: 1, padding: '6px 0', textAlign: 'center',
-    fontSize: 12, fontWeight: 600, cursor: 'pointer',
-    background: active ? 'var(--color-accent-purple)' : 'transparent',
-    color: active ? 'white' : 'var(--color-text-secondary)',
-    border: 'none', borderRadius: 4,
-  });
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '7px 10px',
-    background: 'var(--color-bg)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 4, color: 'var(--color-text)',
-    fontSize: 12, marginBottom: 6,
-    boxSizing: 'border-box' as const,
-  };
-
   return (
-    <div>
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 10,
-        background: 'var(--color-bg)', borderRadius: 6, padding: 2 }}>
-        <button style={tabStyle(tab === 'paste')} onClick={() => setTab('paste')}>
+    <div className="flex flex-col gap-3">
+      <div className="tn-tabs" role="tablist" aria-label="Add content">
+        <button type="button" role="tab" aria-selected={tab === 'paste'} className="tn-tab" onClick={() => setTab('paste')}>
           Paste Text
         </button>
-        <button style={tabStyle(tab === 'upload')} onClick={() => setTab('upload')}>
+        <button type="button" role="tab" aria-selected={tab === 'upload'} className="tn-tab" onClick={() => setTab('upload')}>
           Upload Files
         </button>
       </div>
@@ -420,7 +460,8 @@ function UploadForm({ onDone }: { onDone?: () => void }) {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Title (optional)"
-        style={inputStyle}
+        aria-label="Title (optional)"
+        className="tn-input"
       />
 
       {tab === 'paste' && (
@@ -429,23 +470,16 @@ function UploadForm({ onDone }: { onDone?: () => void }) {
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Paste your text here..."
+            aria-label="Text to add"
             rows={6}
-            style={{
-              ...inputStyle,
-              resize: 'vertical',
-              fontFamily: 'inherit',
-              minHeight: 100,
-            }}
+            className="tn-textarea"
+            style={{ minHeight: 120 }}
           />
           <button
+            type="button"
             onClick={handlePaste}
             disabled={busy || !content.trim()}
-            style={{
-              width: '100%', padding: 8,
-              background: busy || !content.trim() ? 'var(--color-disabled-bg)' : 'var(--color-accent-purple)',
-              color: 'var(--color-on-accent)', border: 'none',
-              borderRadius: 6, fontSize: 12, cursor: 'pointer',
-            }}
+            className="tn-btn tn-btn-primary self-start"
           >
             {busy ? 'Adding...' : 'Add to Knowledge Base'}
           </button>
@@ -458,26 +492,24 @@ function UploadForm({ onDone }: { onDone?: () => void }) {
             type="file"
             multiple
             accept={ACCEPTED_EXTENSIONS}
+            aria-label="Files to upload"
             onChange={(e) => {
               const selected = Array.from(e.target.files || []);
               setFiles(selected);
             }}
-            style={{ ...inputStyle, padding: 6 }}
+            className="tn-input text-[13px]"
+            style={{ height: 'auto', padding: 6 }}
           />
           {files.length > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+            <div className="tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)', overflowWrap: 'anywhere' }}>
               {files.map((f) => f.name).join(', ')}
             </div>
           )}
           <button
+            type="button"
             onClick={handleUpload}
             disabled={busy || files.length === 0}
-            style={{
-              width: '100%', padding: 8,
-              background: busy || files.length === 0 ? 'var(--color-disabled-bg)' : 'var(--color-accent-purple)',
-              color: 'var(--color-on-accent)', border: 'none',
-              borderRadius: 6, fontSize: 12, cursor: 'pointer',
-            }}
+            className="tn-btn tn-btn-primary self-start"
           >
             {busy ? 'Uploading...' : 'Upload & Index'}
           </button>
@@ -485,47 +517,14 @@ function UploadForm({ onDone }: { onDone?: () => void }) {
       )}
 
       {result && (
-        <div style={{ fontSize: 12, color: 'var(--color-success)', marginTop: 8 }}>
+        <div role="status" className="text-[13px]" style={{ color: 'var(--color-text)' }}>
           {result}
         </div>
       )}
-      {error && (
-        <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 8 }}>
-          {error}
-        </div>
-      )}
+      {error && <FailRow>{error}</FailRow>}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Icon map
-// ---------------------------------------------------------------------------
-
-const iconMap: Record<string, LucideIcon> = {
-  gmail: Mail,
-  gmail_imap: Mail,
-  gmail_api: Mail,
-  outlook: Mail,
-  slack: Hash,
-  imessage: MessageCircle,
-  whatsapp: PhoneCall,
-  gdrive: FolderOpen,
-  dropbox: Package,
-  notion: BookText,
-  obsidian: FileText,
-  apple_notes: StickyNote,
-  granola: FileText,
-  gcalendar: CalendarDays,
-  gcontacts: Contact,
-  apple_contacts: Contact,
-  upload: Upload,
-};
-
-const IconFor = ({ id, size = 18 }: { id: string; size?: number }) => {
-  const Ico = iconMap[id] ?? Link2;
-  return <Ico size={size} />;
-};
 
 // The Gmail card unifies the OAuth (`gmail`) and IMAP (`gmail_imap`) backend
 // connectors — both should resolve to the gmail_imap catalog entry so the
@@ -551,42 +550,27 @@ function GmailOAuthAdvanced({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ marginTop: 12 }}>
+    <div className="mt-4">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          fontSize: 11,
-          color: 'var(--color-text-tertiary)',
-          cursor: disabled ? 'default' : 'pointer',
-          opacity: disabled ? 0.5 : 1,
-          textDecoration: 'underline',
-        }}
+        aria-expanded={open}
+        className="tn-btn tn-btn-ghost tn-btn-sm"
+        style={{ paddingLeft: 0, color: 'var(--color-text-secondary)', textDecoration: 'underline', textUnderlineOffset: 3 }}
       >
         {open ? 'Hide advanced' : 'Advanced: Connect with Google OAuth'}
       </button>
       {open && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: 10,
-            background: 'var(--color-bg)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 6,
-          }}
-        >
-          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginBottom: 8 }}>
+        <div className="tn-panel mt-2 p-4" style={{ background: 'var(--color-bg)' }}>
+          <div style={hintStyle}>
             For developers with an existing Google Cloud project. Enable the
             Gmail API and create a Desktop OAuth client at{' '}
             <a
               href="https://console.cloud.google.com/apis/credentials"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--color-accent)', textDecoration: 'underline' }}
+              style={linkStyle}
             >
               Google Cloud Credentials →
             </a>{' '}
@@ -683,11 +667,11 @@ export function SyncStatusDisplay({
   // this transitional state; the disconnect handler retries automatically.
   if (sync?.state === 'stopping') {
     return (
-      <div>
-        <div style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 4 }}>
+      <div className="text-[13px] leading-5">
+        <div style={{ color: 'var(--color-text)', fontWeight: 500 }}>
           Disconnect pending — waiting for the active sync to stop.
         </div>
-        <div style={{ fontSize: 10.5, color: 'var(--color-text-tertiary)' }}>
+        <div style={{ color: 'var(--color-text-tertiary)' }}>
           Indexed data will be cleaned up before this source disconnects.
         </div>
       </div>
@@ -697,20 +681,15 @@ export function SyncStatusDisplay({
   // Error state
   if (sync?.error) {
     return (
-      <div>
-        <div style={{ fontSize: 12, color: 'var(--color-error)', marginBottom: 4 }}>
+      <div className="flex flex-col items-start gap-2 text-[13px] leading-5">
+        <div style={{ color: 'var(--fail)', fontWeight: 500, overflowWrap: 'anywhere' }}>
           Error: {sync.error}
         </div>
         <button
+          type="button"
           onClick={handleSync}
           disabled={syncing || disabled}
-          style={{
-            fontSize: 10, padding: '2px 10px',
-            background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-            border: 'none', borderRadius: 3,
-            cursor: syncing || disabled ? 'default' : 'pointer', fontWeight: 600,
-            opacity: syncing || disabled ? 0.5 : 1,
-          }}
+          className="tn-btn tn-btn-sm"
         >{syncing ? 'Retrying...' : 'Retry Sync'}</button>
       </div>
     );
@@ -733,20 +712,20 @@ export function SyncStatusDisplay({
   if (sync?.state === 'syncing' || syncing) {
     const rangeLabel = backlogRange ?? 'building corpus';
     return (
-      <div>
-        <div style={{ fontSize: 11, color: 'var(--color-warning)', marginBottom: 4 }}>
+      <div className="text-[13px] leading-5">
+        <div style={{ color: 'var(--color-text)' }}>
           Indexed{' '}
-          <span key={totalIndexed} className="sync-bump">
+          <span key={totalIndexed} className="sync-bump tn-mono">
             {totalIndexed.toLocaleString()} {unitLabel}
           </span>{' '}
-          <span style={{ color: 'var(--color-text-tertiary)' }}>
+          <span style={{ color: 'var(--color-text-secondary)' }}>
             ({rangeLabel})
           </span>{' '}
-          <span style={{ color: 'var(--color-text-tertiary)' }}>
+          <span style={{ color: 'var(--color-text-secondary)' }}>
             · Still indexing…
           </span>
         </div>
-        <div style={{ fontSize: 10.5, color: 'var(--color-text-tertiary)' }}>
+        <div style={{ color: 'var(--color-text-tertiary)' }}>
           Deep Research available now · results improve as more {unitLabel} are indexed
         </div>
       </div>
@@ -761,12 +740,12 @@ export function SyncStatusDisplay({
       ? 'complete inbox'
       : backlogRange;
     return (
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--color-success)' }}>
-            Indexed {totalIndexed.toLocaleString()} {unitLabel}
+      <div className="text-[13px] leading-5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span style={{ color: 'var(--color-text)' }}>
+            Indexed <span className="tn-mono">{totalIndexed.toLocaleString()} {unitLabel}</span>
             {rangeLabel && (
-              <span style={{ color: 'var(--color-text-tertiary)' }}>
+              <span style={{ color: 'var(--color-text-secondary)' }}>
                 {' '}({rangeLabel})
               </span>
             )}
@@ -777,21 +756,15 @@ export function SyncStatusDisplay({
             )}
           </span>
           <button
+            type="button"
             onClick={handleSync}
             disabled={syncing || disabled}
-            style={{
-              fontSize: 9, padding: '1px 6px',
-              background: 'transparent',
-              color: 'var(--color-text-tertiary)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 3,
-              cursor: syncing || disabled ? 'default' : 'pointer',
-              opacity: syncing || disabled ? 0.5 : 1,
-            }}
+            className="tn-btn tn-btn-ghost tn-btn-sm"
+            style={{ height: 24, padding: '0 6px', color: 'var(--color-text-secondary)' }}
           >{syncing ? '...' : 'Re-sync'}</button>
         </div>
         {syncError && (
-          <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 4 }}>
+          <div className="mt-1" style={{ color: 'var(--fail)', fontWeight: 500 }}>
             {syncError}
           </div>
         )}
@@ -802,32 +775,27 @@ export function SyncStatusDisplay({
   // Connected but nothing ever ingested. Mirror the original copy.
   const hasSynced = sync?.last_sync != null;
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+    <div className="text-[13px] leading-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span style={{ color: 'var(--color-text-secondary)' }}>
           {hasSynced
             ? `Synced — 0 ${unitLabel} found`
             : 'Connected — not synced yet'}
         </span>
         <button
+          type="button"
           onClick={handleSync}
           disabled={syncing || disabled}
-          style={{
-            fontSize: 10, padding: '2px 10px',
-            background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-            border: 'none', borderRadius: 3,
-            cursor: syncing || disabled ? 'default' : 'pointer', fontWeight: 600,
-            opacity: syncing || disabled ? 0.5 : 1,
-          }}
+          className="tn-btn tn-btn-sm"
         >{syncing ? 'Syncing...' : hasSynced ? 'Re-sync' : 'Sync Now'}</button>
       </div>
       {hasSynced && connectorId === 'slack' && (
-        <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+        <div className="mt-1" style={{ color: 'var(--color-text-tertiary)' }}>
           Tip: invite the bot to channels with /invite @OpenJarvis, then re-sync
         </div>
       )}
       {syncError && (
-        <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 4 }}>
+        <div className="mt-1" style={{ color: 'var(--fail)', fontWeight: 500 }}>
           {syncError}
         </div>
       )}
@@ -1046,277 +1014,266 @@ function DataSourcesSection() {
     : [...notConnectedBase, uploadEntry];
   const connectorActionsBusy = loading || disconnectingId !== null;
 
+  const reduceMotion = useReducedMotion();
+  const openTransition = reduceMotion
+    ? { duration: 0 }
+    : { duration: 0.16, ease: 'easeOut' as const };
+
   if (isFirstLoad) {
     return (
-      <div className="flex flex-col gap-5">
-        <section>
-          <div className="hud-label mb-2" style={{ color: 'var(--color-text-tertiary)' }}>
-            Loading sources…
-          </div>
-          <div className="flex flex-col gap-2">
-            {[0, 1, 2, 3].map((i) => (
+      <section aria-busy="true" aria-labelledby="ds-loading">
+        <SectionHeading id="ds-loading">Loading sources…</SectionHeading>
+        <ul className="mt-1">
+          {[0, 1, 2, 3].map((i) => (
+            <LineStop
+              key={i}
+              first={i === 0}
+              last={i === 3}
+              rail="var(--color-border)"
+              station={<Station line="none" state="unavailable" />}
+            >
               <div
-                key={i}
-                className="hud-panel data-skeleton"
-                style={{
-                  padding: '14px 18px',
-                  height: 60,
-                  opacity: 0.6 - i * 0.08,
-                }}
-              />
-            ))}
-          </div>
-        </section>
-      </div>
+                className="flex flex-col justify-center gap-2"
+                style={{ height: 56, borderBottom: '1px solid var(--color-border)' }}
+              >
+                <div className="data-skeleton" style={{ height: 12, width: `${36 - i * 5}%` }} />
+                <div className="data-skeleton" style={{ height: 10, width: `${58 - i * 7}%`, opacity: 0.6 }} />
+              </div>
+            </LineStop>
+          ))}
+        </ul>
+      </section>
     );
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Connected sources */}
+    <div className="flex flex-col gap-10">
+      {/* Connected sources: filled stations on the data line */}
       {connected.length > 0 && (
-        <section>
-          <div className="hud-label mb-2 flex items-center gap-2">
-            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: 'var(--color-success)' }} />
-            Connected · {connected.length}
-          </div>
-          <div className="flex flex-col gap-2">
-          {connected.map((c) => {
+        <section aria-labelledby="ds-connected">
+          <SectionHeading
+            id="ds-connected"
+            actions={<span className="tn-mono" style={{ color: 'var(--color-text-secondary)' }}>{connected.length}</span>}
+          >
+            Connected
+          </SectionHeading>
+          <ul className="mt-1">
+          {connected.map((c, i) => {
             const meta = metaFor(c.connector_id);
             const unit = meta?.unitLabel || 'items';
             const sync = syncStatuses[c.connector_id];
-            const hasError = !!sync?.error;
+            const failed = !!sync?.error || disconnectError?.id === c.connector_id;
+            const state: StationState = failed ? 'failed' : 'current';
             return (
-              <div
+              <LineStop
                 key={c.connector_id}
-                className="hud-panel"
-                style={{
-                  borderColor: hasError
-                    ? 'color-mix(in srgb, var(--color-error) 28%, transparent)'
-                    : 'var(--color-border)',
-                }}
+                first={i === 0}
+                last={i === connected.length - 1}
+                rail="var(--line-data)"
+                station={<Station line="data" state={state} />}
               >
-                <div style={{
-                  padding: '14px 18px',
-                  display: 'flex', alignItems: 'center', gap: 14,
-                }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="font-semibold" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+                <div
+                  className="flex items-start gap-4"
+                  style={{ padding: '17px 0 14px', borderBottom: '1px solid var(--color-border)' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15px] leading-[22px] font-semibold truncate" style={{ color: 'var(--color-text)' }}>
                       {meta?.display_name ?? c.display_name}
                     </div>
-                    <SyncStatusDisplay
-                      chunks={c.chunks}
-                      sync={sync}
-                      unitLabel={unit}
-                      connectorId={c.connector_id}
-                      disabled={connectorActionsBusy}
-                      onSyncTriggered={loadConnectors}
-                    />
+                    <div className="mt-0.5">
+                      <SyncStatusDisplay
+                        chunks={c.chunks}
+                        sync={sync}
+                        unitLabel={unit}
+                        connectorId={c.connector_id}
+                        disabled={connectorActionsBusy}
+                        onSyncTriggered={loadConnectors}
+                      />
+                    </div>
                     {disconnectError?.id === c.connector_id && (
-                      <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 4 }}>
+                      <FailRow className="mt-2">
                         Disconnect failed: {disconnectError.message}
-                      </div>
+                      </FailRow>
                     )}
                   </div>
                   <button
+                    type="button"
                     onClick={() => handleDisconnect(c.connector_id)}
                     disabled={connectorActionsBusy}
-                    className="hud-label"
-                    style={{
-                      padding: '6px 12px',
-                      background: 'transparent',
-                      color: 'var(--color-text-secondary)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 4,
-                      cursor: connectorActionsBusy ? 'default' : 'pointer',
-                      letterSpacing: '0.15em',
-                      opacity: connectorActionsBusy ? 0.5 : 1,
-                    }}
+                    className="tn-btn tn-btn-sm shrink-0"
+                    style={{ marginTop: -3 }}
                   >
                     {disconnectingId === c.connector_id
                       ? sync?.state === 'stopping' ? 'Cleaning up…' : 'Disconnecting…'
                       : sync?.state === 'stopping' ? 'Finish disconnect' : 'Disconnect'}
                   </button>
                 </div>
-              </div>
+              </LineStop>
             );
           })}
-          </div>
+          </ul>
         </section>
       )}
 
-      {/* Not connected list */}
+      {/* Not connected: open stations on a line not yet in service */}
       {notConnected.length > 0 && (
-        <section>
-          <div className="hud-label mb-2 flex items-center gap-2">
-            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: 'var(--color-text-tertiary)' }} />
-            Available · {notConnected.length}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-          {notConnected.map((c) => {
+        <section aria-labelledby="ds-available">
+          <SectionHeading
+            id="ds-available"
+            actions={<span className="tn-mono" style={{ color: 'var(--color-text-secondary)' }}>{notConnected.length}</span>}
+          >
+            Available
+          </SectionHeading>
+          <ul className="mt-1">
+          {notConnected.map((c, i) => {
             const meta = metaFor(c.connector_id);
             const isExpanded = expandedId === c.connector_id;
+            const panelId = `ds-connect-${c.connector_id}`;
+            const isConnecting = connectingId === c.connector_id && !!connectStage;
+            const showError = !!connectError && connectingId === null && expandedId === c.connector_id;
+            const toggle = () => setExpandedId(isExpanded ? null : c.connector_id);
 
             return (
-              <div
+              <LineStop
                 key={c.connector_id}
-                className="hud-panel"
-                style={{
-                  gridColumn: isExpanded ? '1 / -1' : undefined,
-                  opacity: isExpanded ? 1 : 0.85,
-                  borderStyle: isExpanded ? 'solid' : 'dashed',
-                }}
+                first={i === 0}
+                last={i === notConnected.length - 1}
+                rail="var(--color-border)"
+                station={<Station line="data" state={showError ? 'failed' : isConnecting ? 'current' : 'open'} />}
               >
+                <div style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <div
-                  style={{
-                    padding: '12px 14px', display: 'flex',
-                    alignItems: 'center', gap: 12,
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setExpandedId(isExpanded ? null : c.connector_id)}
+                  className="flex items-start gap-4 cursor-pointer"
+                  style={{ padding: '17px 0 14px' }}
+                  onClick={toggle}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="font-semibold" style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15px] leading-[22px] font-semibold truncate" style={{ color: 'var(--color-text)' }}>
                       {meta?.display_name ?? c.display_name}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                    <div className="text-[13px] leading-5 mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
                       {meta?.description ?? 'Not connected'}
                     </div>
                   </div>
-                  <span style={{ color: 'var(--color-text-secondary)', fontSize: 12, fontWeight: 500 }}>
-                    {isExpanded ? '× Close' : '+ Add'}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggle(); }}
+                    aria-expanded={isExpanded}
+                    aria-controls={isExpanded ? panelId : undefined}
+                    className={`tn-btn tn-btn-sm shrink-0 ${isExpanded ? 'tn-btn-ghost' : ''}`}
+                    style={{ marginTop: -3 }}
+                  >
+                    {isExpanded ? 'Close' : c.connector_id === 'upload' ? 'Add' : 'Connect'}
+                  </button>
                 </div>
 
-                {isExpanded && c.connector_id === 'upload' && (
-                  <div style={{ borderTop: '1px solid var(--color-border)', padding: 12 }}>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 10 }}>
-                      Paste text or upload files (.txt, .md, .pdf, .docx, .csv) to add them to your knowledge base.
-                    </div>
-                    <UploadForm onDone={loadConnectors} />
-                  </div>
-                )}
-
-                {isExpanded && c.connector_id !== 'upload' && meta?.steps && (
-                  <div style={{ borderTop: '1px solid var(--color-border)', padding: 12 }}>
-                    {meta.steps.map((step, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: 'var(--color-bg)',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: 6, padding: 10,
-                          marginBottom: 8,
-                        }}
-                      >
-                        <div style={{ color: 'var(--color-accent-purple)', fontSize: 10, fontWeight: 600, marginBottom: 3 }}>
-                          STEP {i + 1}
+                {isExpanded && (
+                  <motion.div
+                    id={panelId}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={openTransition}
+                    className="tn-panel mb-4 p-4 md:p-5"
+                    style={{ maxWidth: 640 }}
+                  >
+                    {c.connector_id === 'upload' && (
+                      <>
+                        <div style={hintStyle}>
+                          Paste text or upload files (.txt, .md, .pdf, .docx, .csv) to add them to your knowledge base.
                         </div>
-                        <div style={{ fontSize: 12, marginBottom: step.url ? 4 : 0 }}>{step.label}</div>
-                        {step.url && (
-                          <a
-                            href={step.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--color-accent)', fontSize: 11, textDecoration: 'underline' }}
-                          >
-                            {step.urlLabel || 'Open'} &rarr;
-                          </a>
+                        <UploadForm onDone={loadConnectors} />
+                      </>
+                    )}
+
+                    {c.connector_id !== 'upload' && meta?.steps && (
+                      <>
+                        <StepList>
+                          {meta.steps.map((step, si) => (
+                            <div key={si}>
+                              <div>{step.label}</div>
+                              {step.url && (
+                                <a
+                                  href={step.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block mt-0.5"
+                                  style={linkStyle}
+                                >
+                                  {step.urlLabel || 'Open'} &rarr;
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </StepList>
+                        {meta?.inputFields && (
+                          <div className="mt-4">
+                            <InlineConnectForm
+                              fields={meta.inputFields}
+                              loading={loading && connectingId === c.connector_id}
+                              disabled={connectorActionsBusy}
+                              onSubmit={(req) => handleConnect(c.connector_id, req)}
+                            />
+                          </div>
                         )}
-                      </div>
-                    ))}
-                    {meta?.inputFields && (
-                      <InlineConnectForm
-                        fields={meta.inputFields}
+                        {c.connector_id === 'gmail_imap' && (
+                          <GmailOAuthAdvanced
+                            loading={loading && connectingId === 'gmail'}
+                            disabled={connectorActionsBusy}
+                            onConnect={(req) => handleConnect('gmail', req)}
+                          />
+                        )}
+                        {meta?.troubleshooting && (
+                          <details className="mt-4 text-[13px] leading-5">
+                            <summary className="cursor-pointer" style={{ color: 'var(--color-text-secondary)' }}>
+                              Having trouble?
+                            </summary>
+                            <ul className="mt-2 flex flex-col gap-1.5 list-disc pl-5" style={{ color: 'var(--color-text-secondary)' }}>
+                              {meta.troubleshooting.map((tip: string, ti: number) => (
+                                <li key={ti}>{tip}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </>
+                    )}
+
+                    {c.connector_id !== 'upload' && !meta?.steps && (
+                      <GenericConnectPanel
+                        connectorId={c.connector_id}
+                        displayName={meta?.display_name ?? c.display_name}
+                        authType={c.auth_type || 'oauth'}
                         loading={loading && connectingId === c.connector_id}
                         disabled={connectorActionsBusy}
-                        onSubmit={(req) => handleConnect(c.connector_id, req)}
+                        onConnect={(req) => handleConnect(c.connector_id, req)}
+                        onOAuthStart={() => handleConnect(c.connector_id, null)}
                       />
                     )}
-                    {c.connector_id === 'gmail_imap' && (
-                      <GmailOAuthAdvanced
-                        loading={loading && connectingId === 'gmail'}
-                        disabled={connectorActionsBusy}
-                        onConnect={(req) => handleConnect('gmail', req)}
-                      />
-                    )}
-                    {meta?.troubleshooting && (
-                      <details className="mt-2">
-                        <summary className="text-[11px] cursor-pointer" style={{ color: 'var(--color-text-tertiary)' }}>
-                          Having trouble?
-                        </summary>
-                        <ul className="mt-1 space-y-1">
-                          {meta.troubleshooting.map((tip: string, i: number) => (
-                            <li key={i} className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-                              {tip}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
+
                     {/* Connection progress */}
-                    {connectingId === c.connector_id && connectStage && (
-                      <div style={{ marginTop: 8 }}>
-                        <div style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          fontSize: 12, color: 'var(--color-warning)',
-                        }}>
-                          <div className="animate-spin" style={{
-                            width: 12, height: 12, borderRadius: '50%',
-                            border: '2px solid var(--color-warning)',
-                            borderTopColor: 'transparent',
-                          }} />
+                    {c.connector_id !== 'upload' && isConnecting && (
+                      <div className="mt-4" role="status">
+                        <div className="text-[13px] leading-5 mb-1.5" style={{ color: 'var(--color-text)' }}>
                           {connectStage}
                         </div>
-                        <div style={{
-                          height: 3, borderRadius: 2, marginTop: 6,
-                          background: 'var(--color-bg-tertiary)',
-                          overflow: 'hidden',
-                        }}>
-                          <div style={{
-                            height: '100%', borderRadius: 2, background: 'var(--color-warning)',
-                            width: connectStage.includes('Sync') ? '75%' : connectStage.includes('Connected') ? '50%' : '25%',
-                            transition: 'width 0.5s ease',
-                          }} />
-                        </div>
+                        {meta?.steps && (
+                          <LineFill
+                            color="var(--line-data)"
+                            fraction={connectStage.includes('Sync') ? 0.75 : connectStage.includes('Connected') ? 0.5 : 0.25}
+                          />
+                        )}
                       </div>
                     )}
                     {/* Connection error */}
-                    {connectError && connectingId === null && expandedId === c.connector_id && (
-                      <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 6 }}>
-                        {connectError}
-                      </div>
+                    {c.connector_id !== 'upload' && showError && (
+                      <FailRow className="mt-4">{connectError}</FailRow>
                     )}
-                  </div>
+                  </motion.div>
                 )}
-
-                {isExpanded && c.connector_id !== 'upload' && !meta?.steps && (
-                  <div style={{ borderTop: '1px solid var(--color-border)', padding: 12 }}>
-                    <GenericConnectPanel
-                      connectorId={c.connector_id}
-                      displayName={meta?.display_name ?? c.display_name}
-                      authType={c.auth_type || 'oauth'}
-                      loading={loading && connectingId === c.connector_id}
-                      disabled={connectorActionsBusy}
-                      onConnect={(req) => handleConnect(c.connector_id, req)}
-                      onOAuthStart={() => handleConnect(c.connector_id, null)}
-                    />
-                    {connectingId === c.connector_id && connectStage && (
-                      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-warning)' }}>
-                        {connectStage}
-                      </div>
-                    )}
-                    {connectError && connectingId === null && expandedId === c.connector_id && (
-                      <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 6 }}>
-                        {connectError}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                </div>
+              </LineStop>
             );
           })}
-          </div>
+          </ul>
         </section>
       )}
     </div>
@@ -1414,88 +1371,57 @@ function SendBlueSection({
   if (binding) {
     const cfg = (binding.config || {}) as Record<string, unknown>;
     return (
-      <div style={{
-        background: 'var(--color-bg-secondary)',
-        border: '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)',
-        borderRadius: 8, marginBottom: 10,
-        overflow: 'hidden',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px' }}>
-          <span style={{ fontSize: 18, marginRight: 10 }}>{'\uD83D\uDCF1'}</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>iMessage + SMS</div>
-            <div style={{ fontSize: 11, color: 'var(--color-success)' }}>
-              Active &mdash; text {(cfg.phone_number as string) || 'your number'} to chat
+      <li className="py-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
+        <div className="flex items-start gap-4">
+          <LineBullet letter="M" size={24} className="mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] leading-[22px] font-semibold" style={{ color: 'var(--color-text)' }}>iMessage + SMS</div>
+            <div className="text-[13px] leading-5" style={{ color: 'var(--color-text-secondary)' }}>
+              Active &mdash; text <span className="tn-mono" style={{ color: 'var(--color-text)' }}>{(cfg.phone_number as string) || 'your number'}</span> to chat
             </div>
+            {health && (
+              <div className="tn-mono text-[12px] leading-4 mt-1.5" style={{ color: 'var(--color-text-tertiary)' }}>
+                Webhook: {health.webhook_registered ? 'registered' : 'not registered'}
+                {health.phone_number && ` \u2022 ${health.phone_number}`}
+              </div>
+            )}
           </div>
           <button
+            type="button"
             onClick={() => onRemove(binding.id)}
-            style={{
-              fontSize: 10, padding: '2px 8px',
-              background: 'transparent',
-              color: 'var(--color-text-secondary)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 4, cursor: 'pointer',
-            }}
+            className="tn-btn tn-btn-sm shrink-0"
           >Remove</button>
         </div>
-        {health && (
-          <div style={{
-            borderTop: '1px solid var(--color-border)',
-            padding: '8px 14px', fontSize: 11,
-            color: 'var(--color-text-secondary)',
-          }}>
-            Webhook: {health.webhook_registered ? 'registered' : 'not registered'}
-            {health.phone_number && ` \u2022 ${health.phone_number}`}
-          </div>
-        )}
-      </div>
+      </li>
     );
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '6px 10px',
-    background: 'var(--color-bg)', border: '1px solid var(--color-border)',
-    borderRadius: 4, color: 'var(--color-text)', fontSize: 12,
-    boxSizing: 'border-box',
-  };
+  const codeStyle = { background: 'var(--color-code-bg)', padding: '1px 4px', borderRadius: 2, color: 'var(--color-text)' } as const;
 
   // Not active — setup wizard
   const steps = [
     {
       title: 'Get SendBlue API keys',
       content: (
-        <div>
-          <div style={{ fontSize: 12, marginBottom: 8 }}>
+        <div className="flex flex-col gap-2 text-[13px] leading-5">
+          <div style={{ color: 'var(--color-text)' }}>
             SendBlue lets your agent send and receive iMessages and SMS. You need an account and API credentials.
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <a
-              href="https://sendblue.co"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--color-accent)', fontSize: 12, textDecoration: 'underline' }}
-            >
+          <div className="flex flex-col gap-1">
+            <a href="https://sendblue.co" target="_blank" rel="noopener noreferrer" className="self-start" style={linkStyle}>
               1. Sign up at sendblue.co &rarr;
             </a>
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <a
-              href="https://dashboard.sendblue.co/api-credentials"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--color-accent)', fontSize: 12, textDecoration: 'underline' }}
-            >
+            <a href="https://dashboard.sendblue.co/api-credentials" target="_blank" rel="noopener noreferrer" className="self-start" style={linkStyle}>
               2. Go to your API Credentials page &rarr;
             </a>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+          <div style={{ color: 'var(--color-text-secondary)' }}>
             Copy the "API Key" and "API Secret" from the credentials page and paste them below.
           </div>
           <input value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-            placeholder="API Key" style={{ ...inputStyle, marginTop: 4 }} />
+            placeholder="API Key" aria-label="API Key" className="tn-input" />
           <input value={apiSecret} onChange={(e) => setApiSecret(e.target.value)}
-            placeholder="API Secret" type="password" style={{ ...inputStyle, marginTop: 4 }} />
+            placeholder="API Secret" aria-label="API Secret" type="password" className="tn-input" />
         </div>
       ),
       canAdvance: apiKey.trim() && apiSecret.trim(),
@@ -1503,12 +1429,12 @@ function SendBlueSection({
     {
       title: 'Enter your phone number',
       content: (
-        <div>
-          <div style={{ fontSize: 12, marginBottom: 8 }}>
+        <div className="flex flex-col gap-2 text-[13px] leading-5">
+          <div style={{ color: 'var(--color-text)' }}>
             Which phone number should SendBlue use? This is the number people will text to reach your agent.
           </div>
           <input value={phone} onChange={(e) => setPhone(e.target.value)}
-            placeholder="+1XXXXXXXXXX" style={inputStyle} />
+            placeholder="+1XXXXXXXXXX" aria-label="Phone number" className="tn-input tn-mono" />
         </div>
       ),
       canAdvance: phone.trim().length >= 10,
@@ -1516,39 +1442,31 @@ function SendBlueSection({
     {
       title: 'Set up webhook (ngrok tunnel)',
       content: (
-        <div>
-          <div style={{ fontSize: 12, marginBottom: 8 }}>
+        <div className="flex flex-col gap-3 text-[13px] leading-5">
+          <div style={{ color: 'var(--color-text)' }}>
             SendBlue needs a public URL to send incoming messages to your local server. Use ngrok to create a tunnel.
           </div>
-          <div style={{
-            fontSize: 11, lineHeight: 1.6,
-            color: 'var(--color-text-secondary)',
-            padding: '8px 10px', marginBottom: 10,
-            background: 'var(--color-bg-secondary)',
-            borderRadius: 6,
-            borderLeft: '3px solid var(--color-accent, var(--color-accent-purple))',
-          }}>
-            <div><strong>1.</strong> Open a terminal and run: <code style={{ color: 'var(--color-accent)', background: 'var(--color-bg)', padding: '1px 4px', borderRadius: 3 }}>ngrok http 8000</code></div>
-            <div style={{ marginTop: 4 }}><strong>2.</strong> Copy the <code style={{ color: 'var(--color-accent)', background: 'var(--color-bg)', padding: '1px 4px', borderRadius: 3 }}>https://</code> forwarding URL (e.g. https://abc123.ngrok.io)</div>
-            <div style={{ marginTop: 4 }}><strong>3.</strong> Paste it below and click "Register Webhook"</div>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <StepList>
+            {[
+              <span key="a">Open a terminal and run: <code className="tn-mono text-[12px]" style={codeStyle}>ngrok http 8000</code></span>,
+              <span key="b">Copy the <code className="tn-mono text-[12px]" style={codeStyle}>https://</code> forwarding URL (e.g. https://abc123.ngrok.io)</span>,
+              <span key="c">Paste it below and click "Register Webhook"</span>,
+            ]}
+          </StepList>
+          <div className="flex flex-wrap gap-2">
             <input
               value={webhookUrl}
               onChange={(e) => { setWebhookUrl(e.target.value); setWebhookStatus('idle'); }}
               placeholder="https://abc123.ngrok-free.app"
-              style={{ ...inputStyle, flex: 1 }}
+              aria-label="Public tunnel URL"
+              className="tn-input tn-mono flex-1"
+              style={{ minWidth: 200, width: 'auto' }}
             />
             <button
+              type="button"
               onClick={registerWebhook}
               disabled={!webhookUrl.trim() || webhookStatus === 'registering'}
-              style={{
-                fontSize: 11, padding: '6px 12px', whiteSpace: 'nowrap',
-                background: webhookStatus === 'done' ? 'var(--color-success)' : 'var(--color-accent-purple)',
-                color: 'var(--color-on-accent)', border: 'none', borderRadius: 4,
-                cursor: 'pointer', fontWeight: 600,
-                opacity: !webhookUrl.trim() || webhookStatus === 'registering' ? 0.5 : 1,
-              }}
+              className={`tn-btn ${webhookStatus === 'done' ? '' : 'tn-btn-primary'}`}
             >
               {webhookStatus === 'registering' ? 'Registering...'
                 : webhookStatus === 'done' ? 'Registered!'
@@ -1557,17 +1475,17 @@ function SendBlueSection({
             </button>
           </div>
           {webhookStatus === 'done' && (
-            <div style={{ fontSize: 11, color: 'var(--color-success)', marginTop: 6 }}>
+            <div role="status" style={{ color: 'var(--color-text)' }}>
               Webhook registered! Incoming texts will be forwarded to your agent.
             </div>
           )}
           {webhookStatus === 'error' && (
-            <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 6 }}>
+            <FailRow>
               Failed to register webhook. Check your ngrok URL and SendBlue credentials.
-            </div>
+            </FailRow>
           )}
-          <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: 8 }}>
-            Don't have ngrok? <a href="https://ngrok.com/download" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)', textDecoration: 'underline' }}>Download it free</a>. You can also skip this step and register the webhook later.
+          <div className="text-[12px] leading-4" style={{ color: 'var(--color-text-tertiary)' }}>
+            Don't have ngrok? <a href="https://ngrok.com/download" target="_blank" rel="noopener noreferrer" style={linkStyle}>Download it free</a>. You can also skip this step and register the webhook later.
           </div>
         </div>
       ),
@@ -1607,97 +1525,97 @@ function SendBlueSection({
   };
 
   return (
-    <div style={{
-      background: 'var(--color-bg-secondary)',
-      border: '1px dashed var(--color-border)',
-      borderRadius: 8, marginBottom: 10,
-      overflow: 'hidden',
-    }}>
+    <li style={{ borderBottom: '1px solid var(--color-border)' }}>
       <div
-        style={{
-          display: 'flex', alignItems: 'center',
-          padding: '12px 14px', cursor: 'pointer',
-        }}
+        className="flex items-start gap-4 py-4 cursor-pointer"
         onClick={() => setStep(step === 0 && !apiKey ? -1 : 0)}
       >
-        <span style={{ fontSize: 18, marginRight: 10 }}>{'\uD83D\uDCF1'}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>iMessage + SMS (SendBlue)</div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+        <LineBullet letter="M" size={24} className="mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[15px] leading-[22px] font-semibold" style={{ color: 'var(--color-text)' }}>iMessage + SMS (SendBlue)</div>
+          <div className="text-[13px] leading-5" style={{ color: 'var(--color-text-secondary)' }}>
             Let people text your agent from any phone
           </div>
         </div>
-        <span style={{ color: 'var(--color-accent-purple)', fontSize: 11, fontWeight: 500 }}>
-          {step >= 0 ? 'Set Up' : '+ Add'}
-        </span>
+        <button
+          type="button"
+          aria-expanded={step >= 0}
+          onClick={(e) => { e.stopPropagation(); setStep(step === 0 && !apiKey ? -1 : 0); }}
+          className="tn-btn tn-btn-sm shrink-0"
+        >
+          {step >= 0 ? 'Set Up' : 'Add'}
+        </button>
       </div>
 
       {step >= 0 && (
-        <div style={{ borderTop: '1px solid var(--color-border)', padding: 14 }}>
-          {/* Step indicator */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-            {steps.map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  flex: 1, height: 3, borderRadius: 2,
-                  background: i <= step ? 'var(--color-accent-purple)' : 'var(--color-border)',
-                }}
-              />
-            ))}
-          </div>
+        <div className="tn-panel mb-4 p-4 md:p-5" style={{ ['--station-fill' as string]: 'var(--color-surface)', maxWidth: 640 }}>
+          <StepStations titles={steps.map((s) => s.title)} current={step} />
 
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+          <h4 className="text-[15px] leading-[22px] font-bold mb-2" style={{ color: 'var(--color-text)' }}>
             {steps[step]?.title}
-          </div>
+          </h4>
           {steps[step]?.content}
 
-          {error && (
-            <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 6 }}>{error}</div>
-          )}
+          {error && <FailRow className="mt-3">{error}</FailRow>}
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <div className="flex gap-2 mt-5">
             {step > 0 && (
-              <button
-                onClick={() => setStep(step - 1)}
-                style={{
-                  fontSize: 12, padding: '6px 16px',
-                  background: 'var(--color-bg)',
-                  color: 'var(--color-text-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 5, cursor: 'pointer',
-                }}
-              >Back</button>
+              <button type="button" onClick={() => setStep(step - 1)} className="tn-btn">Back</button>
             )}
             {step < steps.length - 1 ? (
               <button
+                type="button"
                 onClick={() => setStep(step + 1)}
                 disabled={!steps[step]?.canAdvance}
-                style={{
-                  fontSize: 12, padding: '6px 16px',
-                  background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-                  border: 'none', borderRadius: 5,
-                  cursor: 'pointer', fontWeight: 600,
-                  opacity: steps[step]?.canAdvance ? 1 : 0.5,
-                }}
+                className="tn-btn tn-btn-primary"
               >Next</button>
             ) : (
               <button
+                type="button"
                 onClick={handleFinish}
                 disabled={loading || !steps[step]?.canAdvance}
-                style={{
-                  fontSize: 12, padding: '6px 16px',
-                  background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-                  border: 'none', borderRadius: 5,
-                  cursor: 'pointer', fontWeight: 600,
-                  opacity: loading || !steps[step]?.canAdvance ? 0.5 : 1,
-                }}
+                className="tn-btn tn-btn-primary"
               >{loading ? 'Connecting...' : 'Connect'}</button>
             )}
           </div>
         </div>
       )}
-    </div>
+    </li>
+  );
+}
+
+/** Wizard progress as stations on one line: done = filled, here = action blue, ahead = open. */
+function StepStations({ titles, current }: { titles: string[]; current: number }) {
+  return (
+    <ol className="flex items-start mb-5" aria-label="Setup steps">
+      {titles.map((title, i) => {
+        const done = i < current;
+        const here = i === current;
+        const stroke = here ? 'var(--action)' : done ? 'var(--color-text)' : 'var(--line-none)';
+        return (
+          <li key={title} className="flex-1 min-w-0 flex flex-col gap-1.5" aria-current={here ? 'step' : undefined}>
+            <div className="flex items-center" style={{ height: 14 }}>
+              <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true" className="shrink-0 relative z-[1]">
+                <circle
+                  cx={7} cy={7} r={5.5} strokeWidth={3}
+                  style={{ stroke, fill: done || here ? stroke : 'var(--station-fill, var(--color-bg))' }}
+                />
+              </svg>
+              {i < titles.length - 1 && (
+                <span aria-hidden="true" className="flex-1" style={{ height: 5, marginLeft: -2, background: done ? 'var(--color-text)' : 'var(--color-border)' }} />
+              )}
+            </div>
+            <span
+              className="text-[12px] leading-4 pr-3"
+              style={{ color: here ? 'var(--color-text)' : 'var(--color-text-secondary)', fontWeight: here ? 600 : 400 }}
+            >
+              <span className="sr-only">{done ? 'Done: ' : here ? 'Current: ' : 'Next: '}</span>
+              {title}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -1740,16 +1658,10 @@ function MessagingSection({ agentId }: { agentId: string }) {
     } catch { /* */ }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '6px 10px',
-    background: 'var(--color-bg-secondary)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 4, color: 'var(--color-text)',
-    fontSize: 12, boxSizing: 'border-box',
-  };
-
   return (
-    <div>
+    <section aria-labelledby="ds-channels">
+      <SectionHeading id="ds-channels">Channels</SectionHeading>
+      <ul>
       {/* SendBlue */}
       <SendBlueSection
         agentId={agentId}
@@ -1766,147 +1678,100 @@ function MessagingSection({ agentId }: { agentId: string }) {
         const canConnect = ch.fields.every((f) => !f.required || formValues[f.key]?.trim());
 
         return (
-          <div
-            key={ch.type}
-            style={{
-              background: 'var(--color-bg-secondary)',
-              border: binding ? '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)' : '1px dashed var(--color-border)',
-              borderRadius: 8, marginBottom: 10, overflow: 'hidden',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px' }}>
-              <span style={{ fontSize: 18, marginRight: 10 }}>{ch.icon}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{ch.name}</div>
-                <div style={{
-                  fontSize: 11,
-                  color: binding ? 'var(--color-success)' : 'var(--color-text-secondary)',
-                }}>
+          <li key={ch.type} style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <div className="flex items-start gap-4 py-4">
+              <LineBullet letter={ch.name.charAt(0)} size={24} className="mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[15px] leading-[22px] font-semibold" style={{ color: 'var(--color-text)' }}>{ch.name}</div>
+                <div className="text-[13px] leading-5" style={{ color: 'var(--color-text-secondary)' }}>
                   {binding ? ch.activeLabel(cfg) : ch.description}
                 </div>
+                {binding && (
+                  <div className="text-[13px] leading-5 mt-1" style={{ color: 'var(--color-text)' }}>
+                    {ch.howToUse(cfg)}
+                  </div>
+                )}
               </div>
               {binding ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{
-                    background: 'color-mix(in srgb, var(--color-success) 22%, transparent)', color: 'var(--color-success)',
-                    padding: '2px 8px', borderRadius: 10,
-                    fontSize: 10, fontWeight: 600,
-                  }}>Active</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="tn-chip">Active</span>
                   <button
+                    type="button"
                     onClick={() => handleRemove(binding.id)}
-                    style={{
-                      fontSize: 10, padding: '2px 8px', background: 'transparent',
-                      color: 'var(--color-text-secondary)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 4, cursor: 'pointer',
-                    }}
+                    className="tn-btn tn-btn-sm"
                   >Remove</button>
                 </div>
               ) : (
                 <button
+                  type="button"
                   onClick={() => { setSetupType(isSetup ? null : ch.type); setFormValues({}); }}
-                  style={{
-                    fontSize: 10, padding: '3px 12px', background: 'var(--color-accent-purple)',
-                    color: 'var(--color-on-accent)', border: 'none', borderRadius: 5,
-                    cursor: 'pointer', fontWeight: 600,
-                  }}
+                  aria-expanded={isSetup}
+                  className={`tn-btn tn-btn-sm shrink-0 ${isSetup ? 'tn-btn-ghost' : ''}`}
                 >{isSetup ? 'Cancel' : 'Set Up'}</button>
               )}
             </div>
 
-            {binding && (
-              <div style={{
-                borderTop: '1px solid var(--color-border)',
-                padding: '10px 14px', background: 'var(--color-bg)',
-              }}>
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                  <span style={{ flexShrink: 0 }}>{'\u2192'}</span>
-                  <span>{ch.howToUse(cfg)}</span>
-                </div>
-              </div>
-            )}
-
             {isSetup && (
-              <div style={{
-                borderTop: '1px solid var(--color-border)',
-                padding: 14, background: 'var(--color-bg)',
-              }}>
-                <div style={{
-                  fontSize: 11, lineHeight: 1.5,
-                  color: 'var(--color-text-secondary)',
-                  marginBottom: 12, padding: '8px 10px',
-                  background: 'var(--color-bg-secondary)',
-                  borderRadius: 6,
-                  borderLeft: '3px solid var(--color-accent, var(--color-accent-purple))',
-                }}>
+              <div className="tn-panel mb-4 p-4 md:p-5" style={{ maxWidth: 640 }}>
+                <ol className="flex flex-col mb-4" style={{ borderTop: '1px solid var(--color-border)' }}>
                   {ch.setupSteps.map((s, i) => {
                     if (s.startsWith('COPYABLE:')) {
                       const text = s.slice(9);
                       return (
-                        <div key={i} style={{ marginBottom: 6, marginTop: 4 }}>
-                          <div style={{
-                            position: 'relative',
-                            background: 'var(--color-bg)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: 4, padding: '8px 10px',
-                            fontSize: 10, fontFamily: 'monospace',
-                            wordBreak: 'break-all', lineHeight: 1.4,
-                            maxHeight: 80, overflowY: 'auto',
-                          }}>
-                            {text}
+                        <li key={i} className="py-2.5" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                          <div className="flex items-center justify-end mb-1.5">
                             <button
+                              type="button"
                               onClick={() => { navigator.clipboard.writeText(text); }}
-                              style={{
-                                position: 'sticky', float: 'right', top: 0,
-                                fontSize: 10, padding: '2px 8px',
-                                background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-                                border: 'none', borderRadius: 3,
-                                cursor: 'pointer', fontWeight: 600,
-                              }}
+                              className="tn-btn tn-btn-sm"
                             >Copy</button>
                           </div>
-                        </div>
+                          <pre
+                            className="tn-mono text-[11px] leading-4 p-2.5 overflow-y-auto"
+                            style={{
+                              background: 'var(--color-code-bg)',
+                              border: '1px solid var(--color-border)',
+                              borderRadius: 2,
+                              color: 'var(--color-text)',
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                              maxHeight: 96,
+                            }}
+                          >{text}</pre>
+                        </li>
                       );
                     }
                     return (
-                      <div key={i} style={{ marginBottom: i < ch.setupSteps.length - 1 ? 4 : 0 }}>{s}</div>
+                      <li key={i} className="py-2.5 text-[13px] leading-5" style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text)' }}>{s}</li>
                     );
                   })}
-                </div>
-                {ch.fields.map((field) => (
-                  <div key={field.key} style={{ marginBottom: 8 }}>
-                    <label style={{
-                      display: 'block', fontSize: 11,
-                      color: 'var(--color-text-secondary)',
-                      marginBottom: 3, fontWeight: 500,
-                    }}>
-                      {field.label}{field.required ? ' *' : ''}
+                </ol>
+                <div className="flex flex-col gap-3">
+                  {ch.fields.map((field) => (
+                    <label key={field.key} className="flex flex-col gap-1 text-[13px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                      <span>{field.label}{field.required ? ' *' : ''}</span>
+                      <input
+                        type={field.type || 'text'}
+                        value={formValues[field.key] || ''}
+                        onChange={(e) => setField(field.key, e.target.value)}
+                        placeholder={field.placeholder}
+                        className="tn-input tn-mono"
+                      />
                     </label>
-                    <input
-                      type={field.type || 'text'}
-                      value={formValues[field.key] || ''}
-                      onChange={(e) => setField(field.key, e.target.value)}
-                      placeholder={field.placeholder}
-                      style={inputStyle}
-                    />
-                  </div>
-                ))}
+                  ))}
+                </div>
                 <button
+                  type="button"
                   onClick={() => handleSetup(ch)}
                   disabled={loading || !canConnect}
-                  style={{
-                    fontSize: 12, padding: '7px 20px', background: 'var(--color-accent-purple)',
-                    color: 'var(--color-on-accent)', border: 'none', borderRadius: 5,
-                    cursor: 'pointer', fontWeight: 600,
-                    opacity: loading || !canConnect ? 0.5 : 1, marginTop: 4,
-                  }}
+                  className="tn-btn tn-btn-primary mt-4"
                 >{loading ? 'Connecting...' : 'Connect'}</button>
               </div>
             )}
-          </div>
+          </li>
         );
       })}
-    </div>
+      </ul>
+    </section>
   );
 }
 
@@ -2029,261 +1894,159 @@ function MemorySection() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Stats overview */}
-      <div
-        className="rounded-xl p-5 relative overflow-hidden"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-      >
-        {/* Subtle gradient accent along top edge */}
-        <div className="absolute top-0 left-0 right-0 h-[2px]" style={{
-          background: 'linear-gradient(90deg, var(--color-accent-purple), var(--color-accent), transparent)',
-        }} />
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{
-              background: 'var(--color-accent-purple-subtle)',
-            }}>
-              <Brain size={18} style={{ color: 'var(--color-accent-purple)' }} />
+    <div className="flex flex-col gap-10">
+      {/* Backend status */}
+      <section aria-labelledby="mem-backend">
+        <SectionHeading id="mem-backend">Memory Backend</SectionHeading>
+        <div className="mt-3 min-w-0">
+          {statsError ? (
+            <div className="tn-rule-fail pt-2 flex flex-col items-start gap-2">
+              <p role="alert" className="text-[13px] leading-5 break-words" style={{ color: 'var(--fail)', fontWeight: 500 }}>{statsError}</p>
+              <button
+                type="button"
+                onClick={loadStats}
+                aria-label="Retry memory backend status"
+                className="tn-btn tn-btn-sm"
+              >
+                Retry
+              </button>
             </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Memory Backend</h3>
-              {statsError ? (
-                <div className="mt-0.5">
-                  <p role="alert" className="text-xs break-words" style={{ color: 'var(--color-error)' }}>{statsError}</p>
-                  <button
-                    type="button"
-                    onClick={loadStats}
-                    aria-label="Retry memory backend status"
-                    className="text-xs underline cursor-pointer mt-1"
-                    style={{ color: 'var(--color-accent)' }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : stats ? (
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{
-                    background: stats.entries > 0 ? 'var(--color-success)' : 'var(--color-text-tertiary)',
-                  }} />
-                  <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                    {stats.backend} &middot; {stats.entries.toLocaleString()} {stats.entries === 1 ? 'chunk' : 'chunks'}
-                  </span>
-                </div>
-              ) : (
-                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-tertiary)' }}>Connecting...</p>
-              )}
+          ) : stats ? (
+            <div className="flex items-center gap-3">
+              <Station line="data" state={stats.entries > 0 ? 'current' : 'open'} />
+              <span className="tn-mono text-[15px] leading-[22px]" style={{ color: 'var(--color-text)' }}>
+                {stats.backend} &middot; {stats.entries.toLocaleString()} {stats.entries === 1 ? 'chunk' : 'chunks'}
+              </span>
             </div>
-          </div>
-          {stats && stats.entries > 0 && (
-            <div className="text-right">
-              <div className="text-lg font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>
-                {stats.entries.toLocaleString()}
-              </div>
-              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
-                indexed
-              </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Station line="none" state="unavailable" />
+              <p className="text-[13px] leading-5" style={{ color: 'var(--color-text-tertiary)' }}>Connecting...</p>
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Search */}
-      <div
-        className="rounded-xl p-5"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <Search size={14} style={{ color: 'var(--color-accent-purple)' }} />
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Search Memory</h3>
-        </div>
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-              placeholder="What are you looking for?"
-              className="w-full text-sm px-3 py-2 rounded-lg outline-none transition-colors"
-              style={{
-                background: 'var(--color-bg)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text)',
-              }}
-            />
-          </div>
+      <section aria-labelledby="mem-search">
+        <SectionHeading id="mem-search">Search Memory</SectionHeading>
+        <div className="flex gap-2 mt-3">
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+            placeholder="What are you looking for?"
+            aria-label="Search memory"
+            className="tn-input flex-1"
+            style={{ width: 'auto', minWidth: 0 }}
+          />
           <button
+            type="button"
             onClick={handleSearch}
             disabled={searching || !searchQuery.trim()}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap"
-            style={{
-              background: searching || !searchQuery.trim() ? 'var(--color-bg-tertiary)' : 'var(--color-accent-purple)',
-              color: searching || !searchQuery.trim() ? 'var(--color-text-tertiary)' : 'var(--color-on-accent)',
-              opacity: searching || !searchQuery.trim() ? 0.6 : 1,
-            }}
+            className="tn-btn tn-btn-primary shrink-0"
           >
-            {searching ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
             {searching ? 'Searching' : 'Search'}
           </button>
         </div>
 
         {/* Results */}
         {searchDone && searchResults.length === 0 && (
-          <div className="flex flex-col items-center py-6 gap-2">
-            <Search size={20} style={{ color: 'var(--color-text-tertiary)', opacity: 0.4 }} />
-            <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>No matching memories found</p>
-          </div>
+          <p className="text-[13px] leading-5 mt-4" style={{ color: 'var(--color-text-tertiary)' }}>No matching memories found</p>
         )}
         {searchResults.length > 0 && (
-          <div className="mt-3 space-y-2">
+          <ul className="mt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
             {searchResults.map((r, i) => (
-              <div
-                key={i}
-                className="rounded-lg p-3 transition-colors"
-                style={{
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
+              <li key={i} className="py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <p className="text-[14px] leading-[22px]" style={{ color: 'var(--color-text)', maxWidth: '75ch', overflowWrap: 'anywhere' }}>
                   {r.content.length > 250 ? r.content.slice(0, 250) + '...' : r.content}
                 </p>
-                <div className="flex items-center gap-3 mt-2">
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium" style={{
-                    background: r.score > 0.5
-                      ? 'rgba(74, 222, 128, 0.1)'
-                      : r.score > 0.2
-                        ? 'var(--color-accent-amber-subtle)'
-                        : 'var(--color-bg-tertiary)',
-                    color: r.score > 0.5
-                      ? 'var(--color-success)'
-                      : r.score > 0.2
-                        ? 'var(--color-warning)'
-                        : 'var(--color-text-tertiary)',
-                  }}>
+                <div className="tn-mono flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[12px] leading-4" style={{ color: 'var(--color-text-tertiary)' }}>
+                  <span style={{ color: r.score > 0.5 ? 'var(--color-text)' : 'var(--color-text-secondary)' }}>
                     {(r.score * 100).toFixed(0)}% match
                   </span>
                   {r.metadata?.source != null && (
-                    <span className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                    <span className="min-w-0 truncate">
                       {String(r.metadata.source)}
                     </span>
                   )}
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
-      {/* Add to Memory — two-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Add to Memory: two columns, one below 768px */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Index folder */}
-        <div
-          className="rounded-xl p-5"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <FolderOpen size={14} style={{ color: 'var(--color-accent-purple)' }} />
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Index Folder</h3>
-          </div>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
+        <section className="tn-panel p-5 flex flex-col" aria-labelledby="mem-index">
+          <h3 id="mem-index" className="text-[15px] leading-[22px] font-bold" style={{ color: 'var(--color-text)' }}>Index Folder</h3>
+          <p className="text-[13px] leading-5 mt-1 mb-4" style={{ color: 'var(--color-text-secondary)' }}>
             Scan a folder and index all supported files into memory.
           </p>
-          <div className="flex gap-2 mb-2">
+          <div className="flex gap-2 mb-3">
             <input
               value={indexPath}
               onChange={(e) => setIndexPath(e.target.value)}
               placeholder="~/Documents/notes"
-              className="flex-1 text-sm px-3 py-2 rounded-lg outline-none"
-              style={{
-                background: 'var(--color-bg)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text)',
-              }}
+              aria-label="Folder path"
+              className="tn-input tn-mono flex-1"
+              style={{ width: 'auto', minWidth: 0 }}
             />
             {isTauri() && (
               <button
+                type="button"
                 onClick={handleBrowse}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors whitespace-nowrap"
-                style={{
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text-secondary)',
-                }}
+                className="tn-btn shrink-0"
               >
-                <FolderOpen size={12} />
+                <FolderOpen size={16} aria-hidden="true" />
                 Browse
               </button>
             )}
           </div>
           <button
+            type="button"
             onClick={handleIndex}
             disabled={indexing || !indexPath.trim()}
-            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all"
-            style={{
-              background: indexing || !indexPath.trim() ? 'var(--color-bg-tertiary)' : 'var(--color-accent-purple)',
-              color: indexing || !indexPath.trim() ? 'var(--color-text-tertiary)' : 'var(--color-on-accent)',
-              opacity: indexing || !indexPath.trim() ? 0.6 : 1,
-            }}
+            className="tn-btn tn-btn-primary self-start"
           >
-            {indexing && <Loader2 size={13} className="animate-spin" />}
             {indexing ? 'Indexing files...' : 'Index'}
           </button>
           {indexResult && (
-            <p className="text-xs mt-2 font-medium" style={{ color: 'var(--color-success)' }}>{indexResult}</p>
+            <p role="status" className="tn-mono text-[13px] mt-3" style={{ color: 'var(--color-text)' }}>{indexResult}</p>
           )}
-          {indexError && (
-            <p className="text-xs mt-2 font-medium" style={{ color: 'var(--color-error)' }}>{indexError}</p>
-          )}
-        </div>
+          {indexError && <FailRow className="mt-3">{indexError}</FailRow>}
+        </section>
 
         {/* Paste content */}
-        <div
-          className="rounded-xl p-5"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <FileText size={14} style={{ color: 'var(--color-accent-purple)' }} />
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Store Text</h3>
-          </div>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
+        <section className="tn-panel p-5 flex flex-col" aria-labelledby="mem-store">
+          <h3 id="mem-store" className="text-[15px] leading-[22px] font-bold" style={{ color: 'var(--color-text)' }}>Store Text</h3>
+          <p className="text-[13px] leading-5 mt-1 mb-4" style={{ color: 'var(--color-text-secondary)' }}>
             Paste any text to add directly to your memory store.
           </p>
           <textarea
             value={storeContent}
             onChange={(e) => setStoreContent(e.target.value)}
             placeholder="Paste or type content here..."
+            aria-label="Text to store"
             rows={4}
-            className="w-full text-sm px-3 py-2 rounded-lg outline-none resize-y"
-            style={{
-              background: 'var(--color-bg)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text)',
-              fontFamily: 'inherit',
-              minHeight: 80,
-              marginBottom: 8,
-            }}
+            className="tn-textarea mb-3"
+            style={{ minHeight: 96 }}
           />
           <button
+            type="button"
             onClick={handleStore}
             disabled={storing || !storeContent.trim()}
-            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all"
-            style={{
-              background: storing || !storeContent.trim() ? 'var(--color-bg-tertiary)' : 'var(--color-accent-purple)',
-              color: storing || !storeContent.trim() ? 'var(--color-text-tertiary)' : 'var(--color-on-accent)',
-              opacity: storing || !storeContent.trim() ? 0.6 : 1,
-            }}
+            className="tn-btn tn-btn-primary self-start"
           >
-            {storing && <Loader2 size={13} className="animate-spin" />}
             {storing ? 'Storing...' : 'Store'}
           </button>
           {storeResult && (
-            <p className="text-xs mt-2 font-medium" style={{ color: 'var(--color-success)' }}>{storeResult}</p>
+            <p role="status" className="text-[13px] mt-3" style={{ color: 'var(--color-text)' }}>{storeResult}</p>
           )}
-          {storeError && (
-            <p className="text-xs mt-2 font-medium" style={{ color: 'var(--color-error)' }}>{storeError}</p>
-          )}
-        </div>
+          {storeError && <FailRow className="mt-3">{storeError}</FailRow>}
+        </section>
       </div>
     </div>
   );
@@ -2333,61 +2096,46 @@ export function DataSourcesPage() {
   }, [activeTab, firstAgent, creatingAgent, ensureAgent]);
 
   const tabs = [
-    { id: 'sources' as const, label: 'Data Sources', icon: Database },
-    { id: 'messaging' as const, label: 'Messaging Channels', icon: MessageSquare },
-    { id: 'memory' as const, label: 'Memory', icon: Brain },
+    { id: 'sources' as const, label: 'Data Sources' },
+    { id: 'messaging' as const, label: 'Messaging Channels' },
+    { id: 'memory' as const, label: 'Memory' },
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-10">
-      <div className="max-w-5xl mx-auto">
-      <header className="mb-6">
-        <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-          Data Sources, Channels &amp; Memory
-        </h1>
-        <p className="text-sm mt-2 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
+    <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
+      <div className="max-w-[880px] mx-auto">
+      <header className="mb-5">
+        <h1 className="tn-page-title">Data Sources, Channels &amp; Memory</h1>
+        <p className="text-[14px] leading-[22px] mt-2" style={{ color: 'var(--color-text-secondary)', maxWidth: '68ch' }}>
           Connect personal data so the assistant can search across everything, and set up messaging channels to chat from your phone.
         </p>
       </header>
 
-      <div
-        className="flex gap-1 mb-6"
-        style={{ borderBottom: '1px solid var(--color-border)' }}
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="relative px-4 py-2.5 text-sm transition-colors cursor-pointer"
-              style={{
-                color: isActive ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                fontWeight: isActive ? 600 : 400,
-              }}
-            >
-              {tab.label}
-              {isActive && (
-                <motion.span
-                  layoutId="data-sources-tab-indicator"
-                  className="absolute left-0 right-0 -bottom-px h-[2px]"
-                  style={{ background: 'var(--color-text)' }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                />
-              )}
-            </button>
-          );
-        })}
+      <div className="tn-tabs mb-8 overflow-x-auto" role="tablist" aria-label="Data Sources sections">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            id={`ds-tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls={`ds-panel-${tab.id}`}
+            onClick={() => setActiveTab(tab.id)}
+            className="tn-tab shrink-0 whitespace-nowrap"
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div>
+      <div role="tabpanel" id={`ds-panel-${activeTab}`} aria-labelledby={`ds-tab-${activeTab}`}>
         {activeTab === 'sources' && <DataSourcesSection />}
         {activeTab === 'messaging' && (
           firstAgent ? (
             <MessagingSection agentId={firstAgent.id} />
           ) : creatingAgent ? (
-            <div className="flex items-center gap-3 p-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
+            <div role="status" className="flex items-center gap-3 py-4 text-[14px]" style={{ color: 'var(--color-text-secondary)' }}>
+              <Station line="none" state="current" />
               Setting up your assistant...
             </div>
           ) : null

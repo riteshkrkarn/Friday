@@ -1,5 +1,6 @@
 import { useReducer, useState, type FormEvent } from 'react';
-import { ArrowLeft, Cpu, Download, Loader2, Server, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Station } from './transit';
 import {
   resetInferenceSource,
   stageInferenceSource,
@@ -53,30 +54,59 @@ export async function persistAndStartInferenceSource(
 
 function SetupFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'var(--color-bg)' }}>
-      <div className="w-full max-w-lg px-6">
-        <div className="text-center mb-8">
+    <div className="fixed inset-0 flex items-center justify-center overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
+      <div className="w-full max-w-lg px-6 py-10">
+        <div className="mb-6">
           <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-            style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
+            className="pb-2 text-[20px] leading-7 font-bold"
+            style={{ color: 'var(--color-text)', borderBottom: 'var(--rule-bar) solid var(--color-text)' }}
           >
-            <Cpu size={32} />
+            OpenJarvis
           </div>
-          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>
+          <h1 className="tn-page-title mt-5">
             Choose your inference source
           </h1>
-          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          <p className="mt-1 text-[14px] leading-[22px]" style={{ color: 'var(--color-text-secondary)' }}>
             Nothing is installed, started, or downloaded until you confirm a choice.
           </p>
         </div>
-        <div
-          className="p-6 rounded-2xl"
-          style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-        >
+        <div className="tn-panel p-5 sm:p-6" style={{ ['--station-fill' as string]: 'var(--color-surface)' }}>
           {children}
         </div>
       </div>
     </div>
+  );
+}
+
+function SourceOption({
+  line,
+  title,
+  description,
+  onClick,
+}: {
+  line: 'local' | 'none';
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-start gap-4 w-full px-3 py-4 text-left cursor-pointer transition-colors hover:bg-[var(--color-bg-tertiary)]"
+      style={{ borderRadius: 2 }}
+    >
+      <Station line={line} className="mt-1" />
+      <span className="flex-1 min-w-0">
+        <span className="block text-[15px] leading-[22px] font-semibold" style={{ color: 'var(--color-text)' }}>
+          {title}
+        </span>
+        <span className="block text-[13px] leading-5 mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+          {description}
+        </span>
+      </span>
+      <ChevronRight size={16} aria-hidden="true" className="shrink-0 mt-1" style={{ color: 'var(--color-text-secondary)' }} />
+    </button>
   );
 }
 
@@ -87,40 +117,24 @@ export function InferenceSourceChooser({
 }) {
   return (
     <SetupFrame>
-      <div className="flex flex-col gap-3">
-        <button
-          type="button"
-          onClick={() => onChoose('ollama')}
-          className="flex items-start gap-4 p-4 rounded-xl text-left transition-all cursor-pointer"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          <Cpu size={22} className="shrink-0 mt-0.5" style={{ color: 'var(--color-accent)' }} />
-          <span>
-            <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              Local Ollama
-            </span>
-            <span className="block text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-              Run models on this computer. Requires a separate confirmation before Ollama starts or a model downloads.
-            </span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onChoose('custom')}
-          className="flex items-start gap-4 p-4 rounded-xl text-left transition-all cursor-pointer"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          <Server size={22} className="shrink-0 mt-0.5" style={{ color: 'var(--color-accent)' }} />
-          <span>
-            <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              OpenAI-compatible server
-            </span>
-            <span className="block text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-              Connect to LM Studio, vLLM, SGLang, llama.cpp, MLX, or another compatible endpoint. Ollama stays off.
-            </span>
-          </span>
-        </button>
-      </div>
+      <ul className="flex flex-col -mx-3 -my-2">
+        <li style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <SourceOption
+            line="local"
+            title="Local Ollama"
+            description="Run models on this computer. Requires a separate confirmation before Ollama starts or a model downloads."
+            onClick={() => onChoose('ollama')}
+          />
+        </li>
+        <li>
+          <SourceOption
+            line="none"
+            title="OpenAI-compatible server"
+            description="Connect to LM Studio, vLLM, SGLang, llama.cpp, MLX, or another compatible endpoint. Ollama stays off."
+            onClick={() => onChoose('custom')}
+          />
+        </li>
+      </ul>
     </SetupFrame>
   );
 }
@@ -131,10 +145,10 @@ function BackButton({ onClick, label = 'Back', disabled = false }: { onClick: ()
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 text-sm mb-5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-      style={{ color: 'var(--color-text-secondary)' }}
+      className="tn-btn tn-btn-ghost tn-btn-sm mb-5"
+      style={{ marginLeft: -10, color: 'var(--color-text-secondary)' }}
     >
-      <ArrowLeft size={15} />
+      <ArrowLeft size={16} aria-hidden="true" />
       {label}
     </button>
   );
@@ -152,12 +166,7 @@ export function InferenceRecoveryButton({
       type="button"
       onClick={onChange}
       disabled={recovering}
-      className="w-full mt-4 py-2.5 px-4 rounded-xl text-sm font-medium cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-      style={{
-        color: 'var(--color-text-secondary)',
-        border: '1px solid var(--color-border)',
-        background: 'var(--color-surface)',
-      }}
+      className="tn-btn w-full mt-4"
     >
       {recovering ? 'Stopping setup...' : 'Change inference source'}
     </button>
@@ -179,21 +188,21 @@ export function OllamaConsent({
     <SetupFrame>
       <BackButton onClick={onBack} disabled={busy} />
       <div className="flex items-start gap-3 mb-5">
-        <Download size={22} className="shrink-0 mt-0.5" style={{ color: 'var(--color-accent)' }} />
+        <Station line="local" state={busy ? 'current' : 'open'} className="mt-1" />
         <div>
-          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
+          <h2 className="text-[17px] leading-6 font-bold mb-1" style={{ color: 'var(--color-text)' }}>
             Allow local model setup?
           </h2>
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+          <p className="text-[14px] leading-[22px]" style={{ color: 'var(--color-text-secondary)' }}>
             OpenJarvis will start Ollama and may download one model selected for this computer. Model downloads can use several gigabytes of disk space and network data.
           </p>
         </div>
       </div>
       <div
-        className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg text-xs mb-5"
-        style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-text-secondary)' }}
+        className="flex items-start gap-2.5 py-3 text-[13px] leading-5 mb-5"
+        style={{ borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}
       >
-        <ShieldCheck size={16} className="shrink-0" style={{ color: 'var(--color-accent)' }} />
+        <ShieldCheck size={16} aria-hidden="true" className="shrink-0 mt-0.5" style={{ color: 'var(--color-text)' }} />
         Going back leaves Ollama stopped and does not save this choice.
       </div>
       {error && <SetupError message={error} />}
@@ -201,10 +210,9 @@ export function OllamaConsent({
         type="button"
         onClick={onConfirm}
         disabled={busy}
-        className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70"
-        style={{ background: 'var(--color-accent)', color: 'white' }}
+        className="tn-btn tn-btn-primary w-full"
+        style={{ height: 40 }}
       >
-        {busy && <Loader2 size={16} className="animate-spin" />}
         {busy ? 'Starting local setup...' : 'Use Ollama and continue'}
       </button>
     </SetupFrame>
@@ -215,12 +223,8 @@ function SetupError({ message }: { message: string }) {
   return (
     <div
       role="alert"
-      className="px-3.5 py-3 rounded-lg text-sm mb-4"
-      style={{
-        background: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)',
-        color: 'var(--color-error)',
-      }}
+      className="tn-rule-fail pt-2 text-[14px] leading-[22px] mb-4"
+      style={{ color: 'var(--fail)', fontWeight: 500, overflowWrap: 'anywhere' }}
     >
       {message}
     </div>
@@ -254,25 +258,25 @@ export function CustomEndpointSetup({
     });
   };
 
-  const fieldStyle = {
-    background: 'var(--color-surface)',
-    color: 'var(--color-text)',
-    border: '1px solid var(--color-border)',
-  };
+  const labelClass = 'flex flex-col gap-1.5 text-[13px] leading-5 font-medium';
+  const labelStyle = { color: 'var(--color-text-secondary)' };
 
   return (
     <SetupFrame>
       <BackButton onClick={onCancel} label="Cancel" disabled={busy} />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
-            Connect your server
-          </h2>
-          <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            OpenJarvis will connect only after you submit this form. Ollama will not start or download models.
-          </p>
+        <div className="flex items-start gap-3">
+          <Station line="none" state={busy ? 'current' : 'open'} className="mt-1" />
+          <div>
+            <h2 className="text-[17px] leading-6 font-bold mb-1" style={{ color: 'var(--color-text)' }}>
+              Connect your server
+            </h2>
+            <p className="text-[13px] leading-5" style={{ color: 'var(--color-text-secondary)' }}>
+              OpenJarvis will connect only after you submit this form. Ollama will not start or download models.
+            </p>
+          </div>
         </div>
-        <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        <label className={labelClass} style={labelStyle}>
           Server URL
           <input
             aria-label="Server URL"
@@ -280,11 +284,10 @@ export function CustomEndpointSetup({
             required
             value={host}
             onChange={(event) => setHost(event.target.value)}
-            className="block w-full mt-1.5 px-3 py-2 rounded-lg text-sm outline-none"
-            style={fieldStyle}
+            className="tn-input tn-mono"
           />
         </label>
-        <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        <label className={labelClass} style={labelStyle}>
           Model ID
           <input
             aria-label="Model ID"
@@ -293,18 +296,16 @@ export function CustomEndpointSetup({
             value={model}
             onChange={(event) => setModel(event.target.value)}
             placeholder="qwen2.5-7b-instruct"
-            className="block w-full mt-1.5 px-3 py-2 rounded-lg text-sm outline-none"
-            style={fieldStyle}
+            className="tn-input tn-mono"
           />
         </label>
-        <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        <label className={labelClass} style={labelStyle}>
           Server type
           <select
             aria-label="Server type"
             value={engine}
             onChange={(event) => setEngine(event.target.value)}
-            className="block w-full mt-1.5 px-3 py-2 rounded-lg text-sm outline-none"
-            style={fieldStyle}
+            className="tn-select"
           >
             <option value="lmstudio">LM Studio</option>
             <option value="vllm">vLLM</option>
@@ -313,7 +314,7 @@ export function CustomEndpointSetup({
             <option value="mlx">MLX</option>
           </select>
         </label>
-        <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        <label className={labelClass} style={labelStyle}>
           API key (optional)
           <input
             aria-label="API key"
@@ -321,18 +322,16 @@ export function CustomEndpointSetup({
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
             autoComplete="off"
-            className="block w-full mt-1.5 px-3 py-2 rounded-lg text-sm outline-none"
-            style={fieldStyle}
+            className="tn-input tn-mono"
           />
         </label>
         {error && <SetupError message={error} />}
         <button
           type="submit"
           disabled={busy || !host.trim() || !model.trim()}
-          className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-          style={{ background: 'var(--color-accent)', color: 'white' }}
+          className="tn-btn tn-btn-primary w-full"
+          style={{ height: 40 }}
         >
-          {busy && <Loader2 size={16} className="animate-spin" />}
           {busy ? 'Connecting...' : 'Save and connect'}
         </button>
       </form>

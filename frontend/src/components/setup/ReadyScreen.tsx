@@ -57,7 +57,7 @@ function StarterCard({
   return (
     <button
       onClick={() => onSelect(query)}
-      className="flex items-center justify-between gap-3 w-full px-4 py-3 rounded-xl text-left transition-all group"
+      className="flex items-center justify-between gap-3 w-full px-4 py-3 rounded-sm text-left transition-all group"
       style={{
         background: 'var(--color-surface)',
         border: '1px solid var(--color-border)',
@@ -99,7 +99,7 @@ export function ReadyScreen({
     <div className="flex flex-col items-center text-center h-full justify-center gap-6">
       {/* Icon */}
       <div
-        className="w-20 h-20 rounded-2xl flex items-center justify-center"
+        className="w-20 h-20 rounded-sm flex items-center justify-center"
         style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
       >
         <Sparkles size={36} />
@@ -132,7 +132,7 @@ export function ReadyScreen({
       {/* Open Chat button */}
       <button
         onClick={() => onStart()}
-        className="px-8 py-3 rounded-xl font-semibold text-sm transition-all"
+        className="px-8 py-3 rounded-sm font-semibold text-sm transition-all"
         style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
       >
         Open Chat

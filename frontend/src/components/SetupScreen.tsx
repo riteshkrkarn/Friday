@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, CheckCircle2, XCircle, Cpu, Server, Database } from 'lucide-react';
 import {
   getSetupStatus,
   fetchModels,
@@ -12,68 +11,88 @@ import { isEmbedOnlyModel } from '../lib/model-capabilities';
 import { InferenceRecoveryButton, InferenceSourceSetup } from './InferenceSourceSetup';
 
 const STEPS = [
-  { key: 'ollama_ready', label: 'Inference Engine', icon: Cpu, detail: 'Starting Ollama...' },
-  { key: 'model_ready', label: 'AI Model', icon: Database, detail: 'Loading model...' },
-  { key: 'server_ready', label: 'API Server', icon: Server, detail: 'Starting server...' },
+  { key: 'ollama_ready', label: 'Inference Engine', detail: 'Starting Ollama...' },
+  { key: 'model_ready', label: 'AI Model', detail: 'Loading model...' },
+  { key: 'server_ready', label: 'API Server', detail: 'Starting server...' },
 ] as const;
 
 type StepKey = (typeof STEPS)[number]['key'];
 
+/** Row height; the station sits centred on the label line. */
+const ROW_H = 64;
+const STATION = 22;
+
+/**
+ * One station on the vertical setup line. done = filled in the line colour,
+ * current = filled with an action-blue ring, failed = red, waiting = open.
+ */
 function StepRow({
-  icon: Icon,
   label,
   done,
   active,
+  failed,
   detail,
+  line,
+  first,
+  last,
 }: {
-  icon: typeof Cpu;
   label: string;
   done: boolean;
   active: boolean;
+  failed: boolean;
   detail: string;
+  /** CSS colour of this line (local green for Ollama, neutral for a custom server). */
+  line: string;
+  first: boolean;
+  last: boolean;
 }) {
+  const stroke = failed ? 'var(--fail)' : done || active ? line : 'var(--line-none)';
+  const fill = failed || done || active ? stroke : 'var(--color-bg)';
+  const status = done ? 'Ready' : active ? detail : 'Waiting...';
+  const mid = STATION / 2;
   return (
-    <div
-      className="flex items-center gap-4 px-5 py-4 rounded-xl transition-all"
-      style={{
-        background: done
-          ? 'var(--color-accent-subtle)'
-          : active
-            ? 'var(--color-surface)'
-            : 'transparent',
-        border: active ? '1px solid var(--color-border)' : '1px solid transparent',
-      }}
+    <li
+      className="relative flex items-center gap-4"
+      style={{ minHeight: ROW_H, paddingLeft: STATION + 16 }}
+      aria-current={active ? 'step' : undefined}
     >
-      <div
-        className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-        style={{
-          background: done ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-          color: done ? 'white' : 'var(--color-text-tertiary)',
-        }}
+      {!first && (
+        <span aria-hidden="true" className="absolute" style={{ left: mid - 2.5, width: 5, top: 0, height: '50%', background: done || active || failed ? line : 'var(--color-border)' }} />
+      )}
+      {!last && (
+        <span aria-hidden="true" className="absolute" style={{ left: mid - 2.5, width: 5, top: '50%', bottom: 0, background: done ? line : 'var(--color-border)' }} />
+      )}
+      <svg
+        width={STATION}
+        height={STATION}
+        viewBox={`0 0 ${STATION} ${STATION}`}
+        aria-hidden="true"
+        className="absolute z-[1]"
+        style={{ left: 0, top: `calc(50% - ${mid}px)` }}
       >
-        <Icon size={18} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+        {active && !failed && (
+          <circle cx={mid} cy={mid} r={mid - 1} strokeWidth={2} style={{ stroke: 'var(--action)', fill: 'var(--color-bg)' }} />
+        )}
+        <circle
+          cx={mid}
+          cy={mid}
+          r={5.5}
+          strokeWidth={3}
+          style={{ stroke, fill, transition: 'fill 160ms ease-out, stroke 160ms ease-out' }}
+        />
+      </svg>
+      <div className="flex-1 min-w-0 py-2">
+        <div className="text-[15px] leading-[22px] font-semibold" style={{ color: 'var(--color-text)' }}>
           {label}
         </div>
-        <div className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)', maxWidth: '280px' }}>
-          {done ? 'Ready' : active ? detail : 'Waiting...'}
+        <div
+          className="text-[13px] leading-5 truncate"
+          style={{ color: active || failed ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)' }}
+        >
+          {status}
         </div>
       </div>
-      <div className="shrink-0">
-        {done ? (
-          <CheckCircle2 size={18} style={{ color: 'var(--color-accent)' }} />
-        ) : active ? (
-          <Loader2 size={18} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
-        ) : (
-          <div
-            className="w-4 h-4 rounded-full"
-            style={{ border: '2px solid var(--color-border)' }}
-          />
-        )}
-      </div>
-    </div>
+    </li>
   );
 }
 
@@ -159,48 +178,53 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
           ? 'server_ready'
           : null;
 
+  const isCustom = status?.source === 'custom';
+  const lineColor = isCustom ? 'var(--line-none)' : 'var(--line-local)';
+  const steps = isCustom
+    ? [
+        { key: 'ollama_ready' as const, label: 'Inference Engine', detail: 'Connecting to your server...' },
+        { key: 'model_ready' as const, label: 'Endpoint', detail: 'Checking endpoint...' },
+        { key: 'server_ready' as const, label: 'API Server', detail: 'Starting server...' },
+      ]
+    : STEPS;
+  const readyCount =
+    (status?.ollama_ready ? 1 : 0) + (status?.model_ready ? 1 : 0) + (status?.server_ready ? 1 : 0);
+
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center"
+      className="fixed inset-0 flex items-center justify-center overflow-y-auto"
       style={{ background: 'var(--color-bg)' }}
     >
-      <div className="w-full max-w-md px-6">
-        {/* Logo */}
-        <div className="text-center mb-10">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-            style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
+      <div className="w-full max-w-md px-6 py-10">
+        {/* Wordmark */}
+        <div className="mb-8">
+          <h1
+            className="pb-3 text-[28px] leading-8 font-bold"
+            style={{ color: 'var(--color-text)', borderBottom: 'var(--rule-bar) solid var(--color-text)' }}
           >
-            <Cpu size={32} />
-          </div>
-          <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>
             OpenJarvis
           </h1>
-          <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+          <p className="mt-3 text-[15px] leading-[22px]" style={{ color: 'var(--color-text-secondary)' }}>
             {!statusChecked
               ? 'Checking your saved setup...'
-              : status?.source === 'custom'
+              : isCustom
                 ? 'Connecting to your AI server...'
                 : 'Setting up your local AI...'}
           </p>
         </div>
 
-        {/* Steps */}
-        <div className="flex flex-col gap-2 mb-8">
-          {(status?.source === 'custom'
-            ? [
-                { key: 'ollama_ready' as const, label: 'Inference Engine', icon: Cpu, detail: 'Connecting to your server...' },
-                { key: 'model_ready' as const, label: 'Endpoint', icon: Database, detail: 'Checking endpoint...' },
-                { key: 'server_ready' as const, label: 'API Server', icon: Server, detail: 'Starting server...' },
-              ]
-            : STEPS
-          ).map((step) => (
+        {/* Steps: stations on one line */}
+        <ol className="flex flex-col mb-6" aria-label="Setup progress">
+          {steps.map((step, i) => (
             <StepRow
               key={step.key}
-              icon={step.icon}
               label={step.label}
               done={status?.[step.key] ?? false}
               active={activeStep === step.key}
+              failed={!!status?.error && activeStep === step.key}
+              line={lineColor}
+              first={i === 0}
+              last={i === steps.length - 1}
               detail={
                 activeStep === step.key && status?.detail
                   ? status.detail
@@ -208,19 +232,14 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
               }
             />
           ))}
-        </div>
+        </ol>
 
         {/* Error */}
         {status?.error && (
           <div
-            className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm"
-            style={{
-              background: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)',
-              color: 'var(--color-error)',
-            }}
+            className="tn-panel tn-rule-fail px-4 py-3 text-[14px] leading-[22px]"
+            style={{ color: 'var(--fail)', fontWeight: 500 }}
           >
-            <XCircle size={16} className="shrink-0 mt-0.5" />
             <span style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{status.error}</span>
           </div>
         )}
@@ -228,10 +247,26 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
         {recoveryError && (
           <div
             role="alert"
-            className="mt-3 px-4 py-3 rounded-xl text-sm"
-            style={{ color: 'var(--color-error)' }}
+            className="tn-rule-fail mt-3 pt-2 text-[14px] leading-[22px]"
+            style={{ color: 'var(--fail)', fontWeight: 500, overflowWrap: 'anywhere' }}
           >
             {recoveryError}
+          </div>
+        )}
+
+        {/* Progress: a 5px line that fills as each station is reached */}
+        {!status?.error && (
+          <div aria-hidden="true" style={{ height: 5, background: 'var(--color-bg-tertiary)', overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: '100%',
+                background: lineColor,
+                transform: `scaleX(${readyCount / 3})`,
+                transformOrigin: 'left center',
+                transition: 'transform 200ms ease-out',
+              }}
+            />
           </div>
         )}
 
@@ -240,27 +275,6 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
             recovering={recovering}
             onChange={() => void changeInferenceSource()}
           />
-        )}
-
-        {/* Progress bar */}
-        {!status?.error && (
-          <div
-            className="h-1 rounded-full overflow-hidden"
-            style={{ background: 'var(--color-bg-tertiary)' }}
-          >
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                background: 'var(--color-accent)',
-                width: `${
-                  ((status?.ollama_ready ? 1 : 0) +
-                    (status?.model_ready ? 1 : 0) +
-                    (status?.server_ready ? 1 : 0)) *
-                  33.33
-                }%`,
-              }}
-            />
-          </div>
         )}
       </div>
     </div>

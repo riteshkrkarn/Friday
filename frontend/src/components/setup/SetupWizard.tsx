@@ -21,7 +21,7 @@ export function SetupWizard({ onComplete }: { onComplete: (firstQuery?: string) 
 
   const handleConnectComplete = () => {
     // connectedIds: those actually in selectedIds that were not skipped.
-    // We don't track skip state here — IngestDashboard receives all selected
+    // We don't track skip state here â€” IngestDashboard receives all selected
     // (skipped ones will just fail gracefully on sync status fetch).
     setConnectedIds(selectedIds);
     setStep('ingest');
@@ -41,7 +41,7 @@ export function SetupWizard({ onComplete }: { onComplete: (firstQuery?: string) 
       style={{ background: 'var(--color-bg)' }}
     >
       <div
-        className="w-full max-w-2xl mx-6 p-8 rounded-2xl"
+        className="w-full max-w-2xl mx-6 p-8 rounded-sm"
         style={{
           background: 'var(--color-bg-secondary)',
           border: '1px solid var(--color-border)',
@@ -55,7 +55,7 @@ export function SetupWizard({ onComplete }: { onComplete: (firstQuery?: string) 
           {(['pick', 'connect', 'ingest', 'ready'] as WizardStep[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
               <div
-                className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold transition-all"
+                className="flex items-center justify-center w-6 h-6 rounded-sm text-xs font-bold transition-all"
                 style={{
                   background:
                     s === step
@@ -77,7 +77,7 @@ export function SetupWizard({ onComplete }: { onComplete: (firstQuery?: string) 
               </div>
               {i < 3 && (
                 <div
-                  className="w-8 h-0.5 rounded-full"
+                  className="w-8 h-0.5 rounded-sm"
                   style={{
                     background:
                       ['pick', 'connect', 'ingest', 'ready'].indexOf(s) <

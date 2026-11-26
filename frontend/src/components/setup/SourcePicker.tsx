@@ -60,7 +60,7 @@ function CategorySection({
             <button
               key={card.connector_id}
               onClick={() => onToggle(card.connector_id)}
-              className="relative flex flex-col items-start gap-2 p-4 rounded-xl text-left transition-all"
+              className="relative flex flex-col items-start gap-2 p-4 rounded-sm text-left transition-all"
               style={{
                 background: isSelected
                   ? 'var(--color-accent-subtle)'
@@ -78,7 +78,7 @@ function CategorySection({
                 />
               )}
               <div
-                className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                className="w-9 h-9 rounded-sm flex items-center justify-center shrink-0"
                 style={{ background: 'var(--color-bg-tertiary)' }}
               >
                 <Icon size={18} className={card.color} />
@@ -161,7 +161,7 @@ export function SourcePicker({ onContinue }: { onContinue: (selectedIds: string[
         <button
           onClick={() => onContinue(Array.from(selected))}
           disabled={selected.size === 0}
-          className="w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all"
+          className="w-full py-3 px-4 rounded-sm font-semibold text-sm transition-all"
           style={{
             background: selected.size > 0 ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
             color: selected.size > 0 ? 'white' : 'var(--color-text-tertiary)',

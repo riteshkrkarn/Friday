@@ -42,7 +42,7 @@ function SidebarItem({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left transition-all"
+      className="flex items-center gap-3 w-full px-3 py-2 rounded-sm text-left transition-all"
       style={{
         background: active ? 'var(--color-accent-subtle)' : 'transparent',
         border: active ? '1px solid var(--color-accent)' : '1px solid transparent',
@@ -104,7 +104,7 @@ function FilesystemPanel({
           value={path}
           onChange={(e) => setPath(e.target.value)}
           placeholder="/Users/you/Documents/..."
-          className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+          className="flex-1 px-3 py-2 rounded-sm text-sm outline-none"
           style={{
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
@@ -114,7 +114,7 @@ function FilesystemPanel({
         <button
           onClick={() => onConnect({ path })}
           disabled={!path.trim() || isConnecting}
-          className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+          className="px-4 py-2 rounded-sm text-sm font-medium flex items-center gap-2 transition-all"
           style={{
             background: path.trim() ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
             color: path.trim() ? 'white' : 'var(--color-text-tertiary)',
@@ -195,7 +195,7 @@ function OAuthPanel({
       ) : (
         <button
           onClick={startOAuth}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium self-start transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium self-start transition-all"
           style={{
             background: 'var(--color-accent)',
             color: 'var(--color-on-accent)',
@@ -234,19 +234,19 @@ function LocalPanel({
         Full Disk Access is granted to OpenJarvis in System Settings.
       </p>
       <div
-        className="px-4 py-3 rounded-lg text-sm"
+        className="px-4 py-3 rounded-sm text-sm"
         style={{
           background: 'var(--color-bg-tertiary)',
           color: 'var(--color-text-secondary)',
         }}
       >
-        <strong>System Settings</strong> → Privacy &amp; Security → Full Disk Access →
+        <strong>System Settings</strong> â†’ Privacy &amp; Security â†’ Full Disk Access â†’
         enable OpenJarvis
       </div>
       <button
         onClick={() => onConnect({})}
         disabled={isConnecting}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium self-start transition-all"
+        className="flex items-center gap-2 px-4 py-2 rounded-sm text-sm font-medium self-start transition-all"
         style={{
           background: 'var(--color-accent)',
           color: 'var(--color-on-accent)',
@@ -269,7 +269,7 @@ function LocalPanel({
 }
 
 // ---------------------------------------------------------------------------
-// StepByStepPanel — per-connector numbered setup instructions
+// StepByStepPanel â€” per-connector numbered setup instructions
 // ---------------------------------------------------------------------------
 
 function StepByStepPanel({
@@ -563,7 +563,7 @@ export function SourceConnectFlow({
               </p>
               {activeEntry.state === 'error' && activeEntry.error && (
                 <div
-                  className="mt-3 px-4 py-3 rounded-lg text-sm"
+                  className="mt-3 px-4 py-3 rounded-sm text-sm"
                   style={{
                     background: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
                     border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)',
@@ -627,10 +627,10 @@ export function SourceConnectFlow({
           <div className="mt-auto pt-4">
             <button
               onClick={onComplete}
-              className="w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all"
+              className="w-full py-3 px-4 rounded-sm font-semibold text-sm transition-all"
               style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
             >
-              Continue →
+              Continue â†’
             </button>
           </div>
         )}
