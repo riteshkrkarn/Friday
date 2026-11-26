@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
@@ -36,31 +37,22 @@ import { useAgentEvents } from '../lib/useAgentEvents';
 import type { AgentEvent } from '../lib/useAgentEvents';
 import {
   Plus,
-  Bot,
   Pause,
   Play,
   Trash2,
   ChevronLeft,
-  ListTodo,
-  Brain,
+  ChevronRight,
   Zap,
   MoreHorizontal,
   AlertTriangle,
-  DollarSign,
-  Activity,
   MessageSquare,
-  Settings,
-  FileText,
   X,
-  ChevronRight,
   Send,
   RefreshCw,
-  Wifi,
   Database,
-  Copy,
-  Check,
   Pencil,
-  Loader2,
+  Lock,
+  ArrowUpRight,
 } from 'lucide-react';
 import { SOURCE_CATALOG } from '../types/connectors';
 import type { ConnectRequest } from '../types/connectors';
@@ -68,56 +60,144 @@ import { listConnectors, connectSource } from '../lib/connectors-api';
 import type { ToolCallInfo } from '../types';
 import { ToolCallCard } from '../components/Chat/ToolCallCard';
 import { getAgentSchedule, normalizeAgentSchedule } from '../lib/agent-schedule';
+import { lineColor, lineForModel, formatMs } from '../lib/transit-lines';
+import type { Line, RouteStop, StationState } from '../lib/transit-lines';
+import { LineBullet, PageHeader, RouteStrip, SectionHeading, Station, StatusText } from '../components/transit';
 
 // ---------------------------------------------------------------------------
 // Status helpers
 // ---------------------------------------------------------------------------
 
-type AgentStatus =
-  | 'idle'
-  | 'running'
-  | 'paused'
-  | 'error'
-  | 'archived'
-  | 'needs_attention'
-  | 'budget_exceeded'
-  | 'stalled';
+const FAILED_STATUSES = new Set<string>(['error', 'needs_attention', 'budget_exceeded', 'stalled', 'failed']);
 
-const STATUS_COLOR: Record<AgentStatus, string> = {
-  idle: 'var(--color-success)',
-  running: 'var(--color-accent)',
-  paused: 'var(--color-text-tertiary)',
-  error: 'var(--color-error)',
-  archived: 'var(--color-text-tertiary)',
-  needs_attention: 'var(--color-warning)',
-  budget_exceeded: 'var(--color-warning)',
-  stalled: 'var(--color-warning)',
-};
-
-function statusColor(s: string): string {
-  return STATUS_COLOR[s as AgentStatus] || 'var(--color-text-tertiary)';
+/**
+ * Status as a station: running/active is the filled station, paused and
+ * archived are dashed, every failure state is red, anything else is open.
+ */
+function statusStation(s: string): StationState {
+  if (FAILED_STATUSES.has(s)) return 'failed';
+  if (s === 'running' || s === 'active' || s === 'completed') return 'current';
+  if (s === 'paused' || s === 'archived') return 'unavailable';
+  return 'open';
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const color = statusColor(status);
+/** An agent rides the line of its model's engine family. */
+function agentLine(agent: ManagedAgent): Line {
+  return lineForModel((agent.config?.model as string) || '');
+}
+
+/** The first letter of a name, for its bullet. */
+function bulletLetter(name: string): string {
+  const ch = name.trim().match(/[\p{L}\p{N}]/u)?.[0] ?? '?';
+  return ch.toUpperCase();
+}
+
+function StatusBadge({ status, line = 'none' }: { status: string; line?: Line }) {
+  const state = statusStation(status);
   return (
-    <span
-      className="px-2 py-0.5 rounded-full text-xs font-medium"
-      style={{ background: color + '20', color }}
-    >
-      {status.replace('_', ' ')}
+    <span className="inline-flex items-center gap-1.5" title={status}>
+      <Station line={line} state={state} size={12} />
+      <StatusText tone={state === 'failed' ? 'fail' : 'default'}>{status.replace('_', ' ')}</StatusText>
     </span>
   );
 }
 
-function StatusDot({ status }: { status: string }) {
-  const color = statusColor(status);
+const SENDBLUE_STEPS = ['Credentials', 'Phone number', 'Webhook'];
+
+const SURFACE_STATIONS = { '--station-fill': 'var(--color-surface)' } as CSSProperties;
+
+/** Vertical route: every item hangs on a 5px rail at its station, and items may expand inline. */
+function RailItem({
+  line,
+  state,
+  first,
+  last,
+  children,
+  stationTop = 15,
+}: {
+  line: Line;
+  state?: StationState;
+  first: boolean;
+  last: boolean;
+  children: ReactNode;
+  /** Distance from the item's top edge to the station's top edge. */
+  stationTop?: number;
+}) {
+  const rail = lineColor(line);
+  const centre = stationTop + 7;
   return (
-    <span
-      className="w-2 h-2 rounded-full inline-block flex-shrink-0"
-      style={{ background: color }}
-      title={status}
-    />
+    <li className="relative pl-8">
+      {!first && (
+        <span aria-hidden="true" className="absolute top-0 w-[5px]" style={{ left: 4.5, height: centre, background: rail }} />
+      )}
+      {!last && (
+        <span aria-hidden="true" className="absolute bottom-0 w-[5px]" style={{ left: 4.5, top: centre, background: rail }} />
+      )}
+      <span className="absolute left-0 z-[1] flex" style={{ top: stationTop }}>
+        <Station line={line} state={state} />
+      </span>
+      {children}
+    </li>
+  );
+}
+
+/** Stations on one horizontal line: steps behind and the current step are filled. */
+function StepLine({ steps, current, label }: { steps: string[]; current: number; label: string }) {
+  return (
+    <ol className="flex items-start list-none" aria-label={label}>
+      {steps.map((step, i) => {
+        const done = i < current;
+        const isCurrent = i === current;
+        const hasNext = i < steps.length - 1;
+        return (
+          <li
+            key={step}
+            className="flex flex-col min-w-0"
+            style={{ flex: hasNext ? '1 1 0' : '0 0 auto' }}
+            aria-current={isCurrent ? 'step' : undefined}
+          >
+            <span className="flex items-center h-[14px]">
+              <Station line="tools" state={done || isCurrent ? 'current' : 'open'} className="relative z-[1]" />
+              {hasNext && (
+                <span
+                  aria-hidden="true"
+                  className="flex-1 h-[5px] -ml-0.5"
+                  style={{ background: done ? lineColor('tools') : 'var(--color-border)' }}
+                />
+              )}
+            </span>
+            <span
+              className="mt-1.5 pr-3 text-[12px] leading-4 truncate"
+              style={{
+                color: isCurrent ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                fontWeight: isCurrent ? 600 : 400,
+              }}
+            >
+              {step}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** A labelled mono figure. */
+function Figure({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex flex-col min-w-0">
+      <dt className="order-2 text-[12px] leading-4 mt-0.5" style={{ color: 'var(--color-text-tertiary)' }}>{label}</dt>
+      <dd className="order-1 tn-mono text-[18px] leading-6 font-medium" style={{ color: 'var(--color-text)' }}>{value}</dd>
+    </div>
+  );
+}
+
+/** Form label over its control. */
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="block text-[13px] leading-[18px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+      {children}
+    </span>
   );
 }
 
@@ -291,7 +371,7 @@ const TEMPLATE_INSTRUCTIONS: Record<string, string> = {
 };
 
 function Tooltip({ text }: { text: string }) {
-  return <span className="inline-block ml-1 cursor-help" style={{ color: 'var(--color-text-tertiary)', fontSize: 10 }} title={text}>(?)</span>;
+  return <span className="inline-block ml-1 cursor-help tn-mono text-[11px] font-normal" style={{ color: 'var(--color-text-tertiary)' }} title={text}>(?)</span>;
 }
 
 // ---------------------------------------------------------------------------
@@ -402,113 +482,39 @@ function ToolsPicker({
   return (
     <div>
       <div className="flex items-baseline justify-between mb-1">
-        <label
-          className="block text-[13px] font-medium"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          Tools
-        </label>
-        <div className="flex items-center gap-2">
-          <span
-            key={pulseKey}
-            className="tools-count"
-            style={{
-              fontFamily:
-                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-              fontSize: 10.5,
-              color: 'var(--color-text-tertiary)',
-            }}
-          >
-            <span style={{ color: 'var(--color-accent)' }}>
-              {selected.length}
-            </span>
-            <span style={{ opacity: 0.5 }}> / {tollableTools.length}</span>
+        <FieldLabel>Tools</FieldLabel>
+        <div className="flex items-center gap-3">
+          <span key={pulseKey} className="tn-mono text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            <span style={{ color: 'var(--color-text)' }}>{selected.length}</span> / {tollableTools.length}
           </span>
-          <span style={{ color: 'var(--color-text-tertiary)', opacity: 0.3 }}>·</span>
           <button
             type="button"
             onClick={() => onChange(allSelected ? [] : configurable)}
             disabled={tools.length === 0}
-            className="transition-colors"
-            style={{
-              fontFamily:
-                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-              fontSize: 10,
-              color: 'var(--color-text-tertiary)',
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: tools.length === 0 ? 'default' : 'pointer',
-              textDecoration: 'underline',
-              textUnderlineOffset: 2,
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.color = 'var(--color-text)')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.color = 'var(--color-text-tertiary)')
-            }
+            className="tn-mono text-[12px] underline underline-offset-2 cursor-pointer disabled:cursor-default hover:text-[var(--color-text)]"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
             {allSelected ? 'none' : 'all'}
           </button>
         </div>
       </div>
-      <p
-        className="text-[10.5px] mb-2"
-        style={{ color: 'var(--color-text-tertiary)' }}
-      >
+      <p className="text-[12px] leading-4 mb-2" style={{ color: 'var(--color-text-tertiary)' }}>
         What the agent is allowed to call. An empty selection makes a
         chat-only agent.
       </p>
       {tools.length === 0 ? (
-        <div
-          className="px-3 py-2 rounded-lg text-xs"
-          style={{
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text-tertiary)',
-          }}
-        >
+        <div className="tn-panel px-3 py-2 text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
           Loading available tools…
         </div>
       ) : (
-        <div
-          className="rounded-lg overflow-hidden"
-          style={{
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border)',
-          }}
-          onMouseLeave={() => setHovered(null)}
-        >
-          <div
-            className="px-2.5 py-2 overflow-y-auto"
-            style={{ maxHeight: 200 }}
-          >
-            {grouped.map(({ category, items }, idx) => (
-              <div key={category} style={{ marginTop: idx === 0 ? 0 : 10 }}>
-                <div
-                  className="flex items-center gap-1.5 mb-1.5"
-                  style={{
-                    fontFamily:
-                      'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                    fontSize: 9.5,
-                    color: 'var(--color-text-tertiary)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.1em',
-                  }}
-                >
-                  <span style={{ opacity: 0.5 }}>─</span>
-                  <span>{TOOL_CATEGORY_LABELS[category] || category}</span>
-                  <span
-                    className="flex-1"
-                    style={{
-                      borderBottom: '1px dashed var(--color-border)',
-                      marginBottom: 3,
-                      opacity: 0.5,
-                    }}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-1">
+        <div className="tn-panel overflow-hidden" style={SURFACE_STATIONS} onMouseLeave={() => setHovered(null)}>
+          <div className="px-3 pt-1 pb-3 overflow-y-auto space-y-4" style={{ maxHeight: 240 }}>
+            {grouped.map(({ category, items }) => (
+              <div key={category}>
+                <SectionHeading as="h4" className="mb-2 pt-1.5 text-[11px]">
+                  {TOOL_CATEGORY_LABELS[category] || category}
+                </SectionHeading>
+                <div className="flex flex-wrap gap-1.5">
                   {items.map((tool) => {
                     const isSelected = selected.includes(tool.name);
                     const disabled = !tool.configured;
@@ -517,59 +523,26 @@ function ToolsPicker({
                         key={tool.name}
                         type="button"
                         disabled={disabled}
+                        aria-pressed={isSelected}
                         onClick={() => toggle(tool.name)}
                         onMouseEnter={() => setHovered(tool)}
                         onFocus={() => setHovered(tool)}
-                        className="tool-chip"
+                        className="tn-chip tn-mono cursor-pointer transition-colors hover:border-[var(--color-text)] disabled:cursor-not-allowed disabled:hover:border-[var(--color-border)]"
                         style={{
-                          fontFamily:
-                            'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                          fontSize: 11,
-                          lineHeight: 1.2,
-                          padding: '3px 7px 3px 5px',
-                          borderRadius: 4,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          background: isSelected
-                            ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)'
-                            : 'var(--color-bg)',
                           color: disabled
                             ? 'var(--color-text-tertiary)'
                             : isSelected
-                              ? 'var(--color-accent)'
+                              ? 'var(--color-text)'
                               : 'var(--color-text-secondary)',
-                          border: disabled
-                            ? '1px dashed var(--color-border)'
-                            : `1px solid ${isSelected ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                          boxShadow: isSelected
-                            ? 'inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent)'
-                            : 'none',
-                          cursor: disabled ? 'not-allowed' : 'pointer',
-                          opacity: disabled ? 0.55 : 1,
-                          transition:
-                            'background 120ms, color 120ms, border-color 120ms, transform 80ms',
+                          borderColor: isSelected ? 'var(--color-text)' : undefined,
+                          borderStyle: disabled ? 'dashed' : undefined,
                         }}
-                        onMouseDown={(e) =>
-                          !disabled && (e.currentTarget.style.transform = 'scale(0.97)')
-                        }
-                        onMouseUp={(e) =>
-                          (e.currentTarget.style.transform = 'scale(1)')
-                        }
                       >
-                        <span
-                          style={{
-                            opacity: isSelected ? 1 : 0.5,
-                            color: disabled
-                              ? 'var(--color-text-tertiary)'
-                              : isSelected
-                                ? 'var(--color-accent)'
-                                : 'var(--color-text-tertiary)',
-                            fontSize: 10.5,
-                          }}
-                        >
-                          {disabled ? '⨯' : isSelected ? '▣' : '□'}
-                        </span>
+                        <Station
+                          line="tools"
+                          size={10}
+                          state={disabled ? 'unavailable' : isSelected ? 'current' : 'open'}
+                        />
                         <span>{tool.name}</span>
                       </button>
                     );
@@ -580,63 +553,23 @@ function ToolsPicker({
           </div>
           {/* Live description strip */}
           <div
-            className="flex items-start gap-2 px-2.5 py-1.5"
-            style={{
-              borderTop: '1px solid var(--color-border)',
-              background: 'var(--color-bg)',
-              fontFamily:
-                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-              fontSize: 10.5,
-              color: 'var(--color-text-tertiary)',
-              minHeight: 26,
-            }}
+            className="flex items-start gap-2 px-3 py-2 tn-mono text-[12px] leading-4"
+            style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-bg)', minHeight: 32, color: 'var(--color-text-tertiary)' }}
           >
-            <span
-              style={{
-                color: hovered
-                  ? hovered.configured
-                    ? 'var(--color-accent)'
-                    : '#f59e0b'
-                  : 'var(--color-text-tertiary)',
-                opacity: hovered ? 1 : 0.5,
-              }}
-            >
-              {hovered ? (hovered.configured ? '▸' : '!') : '·'}
-            </span>
             {hovered && (
-              <span
-                style={{
-                  color: 'var(--color-text)',
-                  fontWeight: 500,
-                }}
-              >
+              <span className="shrink-0 font-medium" style={{ color: 'var(--color-text)' }}>
                 {hovered.name}
               </span>
             )}
             <span
-              className="min-w-0 whitespace-normal break-words"
-              style={{
-                flex: 1,
-                color: 'var(--color-text-tertiary)',
-                lineHeight: 1.4,
-              }}
+              className="min-w-0 flex-1 whitespace-normal break-words"
+              style={{ color: hovered && !hovered.configured ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)' }}
             >
-              {hovered ? `— ${hint}` : hint}
+              {hint}
             </span>
           </div>
         </div>
       )}
-      <style>{`
-        @keyframes tools-count-pulse {
-          0% { transform: scale(1); }
-          40% { transform: scale(1.18); }
-          100% { transform: scale(1); }
-        }
-        .tools-count {
-          display: inline-block;
-          animation: tools-count-pulse 220ms ease-out;
-        }
-      `}</style>
     </div>
   );
 }
@@ -779,54 +712,56 @@ function LaunchWizard({
     return type;
   };
 
+  const hourLabel = (i: number) => (i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`);
+
   // ── Step 1: Template Selection ──
   if (wizard.step === 1) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-        <div className="rounded-xl p-6 w-full max-w-lg" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>New Agent — Choose Template</h2>
-            <button onClick={onClose} className="p-1 rounded hover:bg-opacity-10" style={{ color: 'var(--color-text-tertiary)' }}><X size={18} /></button>
+      <div className="tn-scrim z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="launch-wizard-title"
+          className="tn-dialog w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6"
+          style={SURFACE_STATIONS}
+        >
+          <div className="flex justify-between items-start gap-4 mb-5">
+            <h2 id="launch-wizard-title" className="text-[20px] leading-7 font-bold">New Agent — Choose Template</h2>
+            <button onClick={onClose} className="tn-icon-btn" aria-label="Close" title="Close"><X size={18} /></button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-px" style={{ background: 'var(--color-border)', border: '1px solid var(--color-border)' }}>
             {templates.map((tpl) => (
               <button
                 key={tpl.id}
                 onClick={() => selectTemplate(tpl)}
-                className="text-left p-4 rounded-lg transition-all items-start"
-                style={{ border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent-purple) 6%, transparent)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-bg-secondary)'; }}
+                className="text-left p-4 flex flex-col items-start gap-2 cursor-pointer transition-colors bg-[var(--color-surface)] hover:bg-[var(--color-bg-tertiary)] focus-visible:bg-[var(--color-bg-tertiary)]"
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-lg">{(tpl as any).icon || '🤖'}</span>
-                  <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>{tpl.name}</span>
-                </div>
-                <div className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)', textAlign: 'left' }}>{tpl.description}</div>
+                <span className="flex items-center gap-2.5">
+                  <LineBullet letter={bulletLetter(tpl.name)} size={24} />
+                  <span className="font-semibold text-[15px]" style={{ color: 'var(--color-text)' }}>{tpl.name}</span>
+                </span>
+                <span className="text-[13px] leading-[18px]" style={{ color: 'var(--color-text-secondary)' }}>{tpl.description}</span>
                 {(tpl as any).tools && (
-                  <div className="flex flex-wrap gap-1 mt-2">
+                  <span className="flex flex-wrap gap-1 mt-1">
                     {((tpl as any).tools as string[]).slice(0, 4).map((t: string) => (
-                      <span key={t} className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'color-mix(in srgb, var(--color-accent-purple) 12%, transparent)', color: 'var(--color-accent-purple)' }}>{t}</span>
+                      <span key={t} className="tn-chip tn-mono">{t}</span>
                     ))}
                     {((tpl as any).tools as string[]).length > 4 && (
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: 'var(--color-text-tertiary)' }}>+{((tpl as any).tools as string[]).length - 4}</span>
+                      <span className="tn-mono text-[12px] self-center px-1" style={{ color: 'var(--color-text-tertiary)' }}>+{((tpl as any).tools as string[]).length - 4}</span>
                     )}
-                  </div>
+                  </span>
                 )}
               </button>
             ))}
             <button
               onClick={() => selectTemplate(null)}
-              className="text-left p-4 rounded-lg transition-all items-start"
-              style={{ border: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--color-accent-purple) 6%, transparent)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.background = 'var(--color-bg-secondary)'; }}
+              className={`text-left p-4 flex flex-col items-start gap-2 cursor-pointer transition-colors bg-[var(--color-surface)] hover:bg-[var(--color-bg-tertiary)] focus-visible:bg-[var(--color-bg-tertiary)] ${templates.length % 2 === 0 ? 'sm:col-span-2' : ''}`}
             >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">⚙️</span>
-                <span className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>Custom Agent</span>
-              </div>
-              <div className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)', textAlign: 'left' }}>Start from scratch. Pick your own tools, schedule, and behavior.</div>
+              <span className="flex items-center gap-2.5">
+                <LineBullet letter="C" size={24} />
+                <span className="font-semibold text-[15px]" style={{ color: 'var(--color-text)' }}>Custom Agent</span>
+              </span>
+              <span className="text-[13px] leading-[18px]" style={{ color: 'var(--color-text-secondary)' }}>Start from scratch. Pick your own tools, schedule, and behavior.</span>
             </button>
           </div>
         </div>
@@ -836,48 +771,52 @@ function LaunchWizard({
 
   // ── Step 2: Configuration ──
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-      <div className="rounded-xl p-6 w-full max-w-lg max-h-[85vh] overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
-            <button onClick={() => setWizard((w) => ({ ...w, step: 1 }))} className="p-1 rounded" style={{ color: 'var(--color-text-tertiary)' }}><ChevronLeft size={18} /></button>
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
+    <div className="tn-scrim z-50 flex items-center justify-center p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="launch-wizard-title"
+        className="tn-dialog w-full max-w-xl max-h-[85vh] overflow-y-auto p-6"
+        style={SURFACE_STATIONS}
+      >
+        <div className="flex justify-between items-center gap-3 mb-5">
+          <div className="flex items-center gap-2 min-w-0">
+            <button onClick={() => setWizard((w) => ({ ...w, step: 1 }))} className="tn-icon-btn shrink-0" aria-label="Back to templates" title="Back to templates"><ChevronLeft size={18} /></button>
+            <h2 id="launch-wizard-title" className="text-[20px] leading-7 font-bold truncate">
               {wizard.templateData ? `New ${wizard.templateData.name}` : 'New Custom Agent'}
             </h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded" style={{ color: 'var(--color-text-tertiary)' }}><X size={18} /></button>
+          <button onClick={onClose} className="tn-icon-btn shrink-0" aria-label="Close" title="Close"><X size={18} /></button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           {/* Name */}
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Agent Name</label>
+          <label className="block">
+            <FieldLabel>Agent Name</FieldLabel>
             <input
               value={wizard.name}
               onChange={(e) => setWizard((w) => ({ ...w, name: e.target.value }))}
               placeholder="e.g. AI Research Tracker"
-              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent"
-              style={{ border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              className="tn-input"
             />
-          </div>
+          </label>
 
           {/* Instruction */}
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>What should this agent do?</label>
+          <label className="block">
+            <FieldLabel>What should this agent do?</FieldLabel>
             <textarea
               value={wizard.instruction}
               onChange={(e) => setWizard((w) => ({ ...w, instruction: e.target.value }))}
               placeholder="e.g. Monitor the latest research papers on reasoning and chain-of-thought in LLMs"
               rows={3}
-              className="w-full px-3 py-2 rounded-lg text-sm bg-transparent resize-none"
-              style={{ border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+              className="tn-textarea resize-none"
             />
             {wizard.instruction.includes('[') && (
-              <p className="text-[10px] mt-1" style={{ color: 'var(--color-warning)' }}>
+              <span className="block text-[12px] mt-1" style={{ color: 'var(--color-text-secondary)' }}>
                 Replace the [bracketed text] with your own values
-              </p>
+              </span>
             )}
-          </div>
+          </label>
 
           {/* Tools picker */}
           <ToolsPicker
@@ -889,51 +828,53 @@ function LaunchWizard({
           />
 
           {/* Model + Schedule row */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block">
+              <FieldLabel>Intelligence</FieldLabel>
+              <span className="flex items-center gap-2">
+                <Station line={lineForModel(wizard.model)} state={wizard.model ? 'open' : 'unavailable'} />
+                <select
+                  value={wizard.model}
+                  onChange={(e) => setWizard((w) => ({ ...w, model: e.target.value }))}
+                  className="tn-select tn-mono min-w-0"
+                >
+                  {models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.id}{m.id === recommendedModel ? ' (recommended)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </span>
+            </label>
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Intelligence</label>
-              <select
-                value={wizard.model}
-                onChange={(e) => setWizard((w) => ({ ...w, model: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-              >
-                {models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id}{m.id === recommendedModel ? ' (recommended)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>Schedule</label>
-              <select
-                value={wizard.scheduleType}
-                onChange={(e) => setWizard((w) => ({ ...w, scheduleType: e.target.value, scheduleValue: e.target.value === 'manual' ? '' : w.scheduleValue }))}
-                className="w-full px-3 py-2 rounded-lg text-sm"
-                style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-              >
-                <option value="manual">Manual (run on demand)</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="hourly">Every N hours</option>
-                <option value="cron">Custom (cron expression)</option>
-              </select>
+              <label className="block">
+                <FieldLabel>Schedule</FieldLabel>
+                <select
+                  value={wizard.scheduleType}
+                  onChange={(e) => setWizard((w) => ({ ...w, scheduleType: e.target.value, scheduleValue: e.target.value === 'manual' ? '' : w.scheduleValue }))}
+                  className="tn-select"
+                >
+                  <option value="manual">Manual (run on demand)</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="hourly">Every N hours</option>
+                  <option value="cron">Custom (cron expression)</option>
+                </select>
+              </label>
               {wizard.scheduleType === 'daily' && (
                 <select
+                  aria-label="Hour"
                   value={(() => { const m = wizard.scheduleValue.match(/^0\s+(\d+)\s/); return m ? m[1] : '9'; })()}
                   onChange={(e) => setWizard((w) => ({ ...w, scheduleValue: `0 ${e.target.value} * * *` }))}
-                  className="w-full px-3 py-1.5 rounded-lg text-xs mt-1.5"
-                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  className="tn-select mt-2"
                 >
-                  {Array.from({ length: 24 }, (_, i) => {
-                    const label = i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`;
-                    return <option key={i} value={String(i)}>{label}</option>;
-                  })}
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={String(i)}>{hourLabel(i)}</option>
+                  ))}
                 </select>
               )}
               {wizard.scheduleType === 'weekly' && (
-                <div className="mt-1.5 space-y-1.5">
+                <div className="mt-2 space-y-2">
                   <div className="flex gap-1">
                     {(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as const).map((day, idx) => {
                       const dayNum = String(idx + 1);
@@ -944,17 +885,19 @@ function LaunchWizard({
                         <button
                           key={day}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => {
                             const newDays = isSelected ? selectedDays.filter(d => d !== dayNum) : [...selectedDays, dayNum].sort();
                             const hourMatch = wizard.scheduleValue.match(/^0\s+(\d+)\s/);
                             const hour = hourMatch ? hourMatch[1] : '9';
                             setWizard((w) => ({ ...w, scheduleValue: newDays.length > 0 ? `0 ${hour} * * ${newDays.join(',')}` : '' }));
                           }}
-                          className="px-1.5 py-1 rounded text-xs font-medium"
+                          className="flex-1 h-8 text-[12px] font-medium cursor-pointer transition-colors"
                           style={{
-                            background: isSelected ? 'var(--color-accent)' : 'var(--color-bg)',
-                            color: isSelected ? 'var(--color-on-accent)' : 'var(--color-text-tertiary)',
-                            border: `1px solid ${isSelected ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                            borderRadius: 2,
+                            background: isSelected ? 'var(--action)' : 'transparent',
+                            color: isSelected ? 'var(--on-action)' : 'var(--color-text-secondary)',
+                            border: `1px solid ${isSelected ? 'var(--action)' : 'var(--color-border)'}`,
                           }}
                         >
                           {day}
@@ -963,45 +906,45 @@ function LaunchWizard({
                     })}
                   </div>
                   <select
+                    aria-label="Hour"
                     value={(() => { const m = wizard.scheduleValue.match(/^0\s+(\d+)\s/); return m ? m[1] : '9'; })()}
                     onChange={(e) => {
                       const cronParts = wizard.scheduleValue.match(/\*\s+\*\s+(.+)$/);
                       const days = cronParts ? cronParts[1] : '1';
                       setWizard((w) => ({ ...w, scheduleValue: `0 ${e.target.value} * * ${days}` }));
                     }}
-                    className="w-full px-3 py-1.5 rounded-lg text-xs"
-                    style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                    className="tn-select"
                   >
-                    {Array.from({ length: 24 }, (_, i) => {
-                      const label = i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`;
-                      return <option key={i} value={String(i)}>{label}</option>;
-                    })}
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={String(i)}>{hourLabel(i)}</option>
+                    ))}
                   </select>
                 </div>
               )}
               {wizard.scheduleType === 'hourly' && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Every</span>
+                <div className="flex items-center gap-2 mt-2 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+                  <span>Every</span>
                   <input
                     type="number" min="1" max="24"
+                    aria-label="Hours between runs"
                     value={(() => { const secs = parseInt(wizard.scheduleValue || '0', 10); return secs > 0 ? Math.round(secs / 3600) : 1; })()}
                     onChange={(e) => {
                       const hrs = Math.min(24, Math.max(1, parseInt(e.target.value, 10) || 1));
                       setWizard((w) => ({ ...w, scheduleValue: String(hrs * 3600) }));
                     }}
-                    className="w-14 px-2 py-1 rounded text-xs text-center"
-                    style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                    className="tn-input tn-mono text-center"
+                    style={{ width: 64 }}
                   />
-                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>hours</span>
+                  <span>hours</span>
                 </div>
               )}
               {wizard.scheduleType === 'cron' && (
                 <input
+                  aria-label="Cron expression"
                   value={wizard.scheduleValue}
                   onChange={(e) => setWizard((w) => ({ ...w, scheduleValue: e.target.value }))}
                   placeholder="0 9 * * *"
-                  className="w-full px-3 py-1.5 rounded-lg text-xs bg-transparent mt-1.5"
-                  style={{ border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                  className="tn-input tn-mono mt-2"
                 />
               )}
             </div>
@@ -1010,106 +953,103 @@ function LaunchWizard({
           {/* Tools tags */}
           {wizard.selectedTools.length > 0 && (
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+              <FieldLabel>
                 Tools <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400 }}>(from template)</span>
-              </label>
+              </FieldLabel>
               <div className="flex flex-wrap gap-1.5">
                 {wizard.selectedTools.map((t) => (
-                  <span key={t} className="text-xs px-2 py-1 rounded" style={{ background: 'color-mix(in srgb, var(--color-accent-purple) 12%, transparent)', color: 'var(--color-accent-purple)' }}>{t}</span>
+                  <span key={t} className="tn-chip tn-mono">
+                    <Station line="tools" size={10} state="current" />
+                    {t}
+                  </span>
                 ))}
               </div>
             </div>
           )}
 
           {/* Advanced Settings */}
-          <details className="rounded-lg" style={{ border: '1px solid var(--color-border)' }}>
-            <summary className="px-3 py-2 cursor-pointer text-sm font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
-              Advanced Settings <span className="text-xs font-normal">(optional)</span>
+          <details className="group" style={{ borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+            <summary className="py-3 cursor-pointer text-[14px] font-semibold flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden" style={{ color: 'var(--color-text)' }}>
+              <ChevronRight size={14} className="group-open:rotate-90 transition-transform duration-150" style={{ color: 'var(--color-text-tertiary)' }} />
+              Advanced Settings <span className="text-[12px] font-normal" style={{ color: 'var(--color-text-tertiary)' }}>(optional)</span>
             </summary>
-            <div className="px-3 pb-3 pt-1 space-y-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Memory Extraction<Tooltip text="How the agent remembers context between runs" /></label>
-                  <select value={wizard.memoryExtraction} onChange={(e) => setWizard((w) => ({ ...w, memoryExtraction: e.target.value }))}
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                    <option value="structured_json">Structured JSON</option>
-                    <option value="causality_graph">Causality Graph</option>
-                    <option value="scratchpad">Scratchpad</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Observation Compression<Tooltip text="How the agent summarizes long tool outputs" /></label>
-                  <select value={wizard.observationCompression} onChange={(e) => setWizard((w) => ({ ...w, observationCompression: e.target.value }))}
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                    <option value="summarize">Summarize</option>
-                    <option value="truncate">Truncate</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Retrieval Strategy<Tooltip text="How the agent searches your knowledge base" /></label>
-                  <select value={wizard.retrievalStrategy} onChange={(e) => setWizard((w) => ({ ...w, retrievalStrategy: e.target.value }))}
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                    <option value="sqlite">BM25 (SQLite FTS5)</option>
-                    <option value="hybrid">Hybrid (BM25 + Semantic)</option>
-                    <option value="colbert">ColBERTv2</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Task Decomposition<Tooltip text="How the agent breaks complex tasks into steps" /></label>
-                  <select value={wizard.taskDecomposition} onChange={(e) => setWizard((w) => ({ ...w, taskDecomposition: e.target.value }))}
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                    <option value="hierarchical">Hierarchical</option>
-                    <option value="phased">Phased</option>
-                    <option value="monolithic">Monolithic</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Max Turns</label>
-                  <input type="number" value={wizard.maxTurns} onChange={(e) => setWizard((w) => ({ ...w, maxTurns: parseInt(e.target.value, 10) || 25 }))}
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Temperature</label>
-                  <input type="number" step="0.1" min="0" max="2" value={wizard.temperature}
-                    onChange={(e) => setWizard((w) => ({ ...w, temperature: parseFloat(e.target.value) || 0.3 }))}
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Budget ($)</label>
-                  <input type="number" step="0.01" value={wizard.budget} onChange={(e) => setWizard((w) => ({ ...w, budget: e.target.value }))}
-                    placeholder="Unlimited"
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>Schedule Type</label>
-                  <select value={wizard.scheduleType} onChange={(e) => setWizard((w) => ({ ...w, scheduleType: e.target.value, scheduleValue: e.target.value === 'manual' ? '' : w.scheduleValue }))}
-                    className="w-full px-2 py-1 rounded text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                    <option value="manual">Manual</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="hourly">Every N hours</option>
-                    <option value="cron">Custom (cron)</option>
-                  </select>
-                </div>
-              </div>
+            <div className="pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
+              <label className="block">
+                <FieldLabel>Memory Extraction<Tooltip text="How the agent remembers context between runs" /></FieldLabel>
+                <select value={wizard.memoryExtraction} onChange={(e) => setWizard((w) => ({ ...w, memoryExtraction: e.target.value }))} className="tn-select">
+                  <option value="structured_json">Structured JSON</option>
+                  <option value="causality_graph">Causality Graph</option>
+                  <option value="scratchpad">Scratchpad</option>
+                  <option value="none">None</option>
+                </select>
+              </label>
+              <label className="block">
+                <FieldLabel>Observation Compression<Tooltip text="How the agent summarizes long tool outputs" /></FieldLabel>
+                <select value={wizard.observationCompression} onChange={(e) => setWizard((w) => ({ ...w, observationCompression: e.target.value }))} className="tn-select">
+                  <option value="summarize">Summarize</option>
+                  <option value="truncate">Truncate</option>
+                  <option value="none">None</option>
+                </select>
+              </label>
+              <label className="block">
+                <FieldLabel>Retrieval Strategy<Tooltip text="How the agent searches your knowledge base" /></FieldLabel>
+                <select value={wizard.retrievalStrategy} onChange={(e) => setWizard((w) => ({ ...w, retrievalStrategy: e.target.value }))} className="tn-select">
+                  <option value="sqlite">BM25 (SQLite FTS5)</option>
+                  <option value="hybrid">Hybrid (BM25 + Semantic)</option>
+                  <option value="colbert">ColBERTv2</option>
+                  <option value="none">None</option>
+                </select>
+              </label>
+              <label className="block">
+                <FieldLabel>Task Decomposition<Tooltip text="How the agent breaks complex tasks into steps" /></FieldLabel>
+                <select value={wizard.taskDecomposition} onChange={(e) => setWizard((w) => ({ ...w, taskDecomposition: e.target.value }))} className="tn-select">
+                  <option value="hierarchical">Hierarchical</option>
+                  <option value="phased">Phased</option>
+                  <option value="monolithic">Monolithic</option>
+                </select>
+              </label>
+              <label className="block">
+                <FieldLabel>Max Turns</FieldLabel>
+                <input type="number" value={wizard.maxTurns} onChange={(e) => setWizard((w) => ({ ...w, maxTurns: parseInt(e.target.value, 10) || 25 }))}
+                  className="tn-input tn-mono" />
+              </label>
+              <label className="block">
+                <FieldLabel>Temperature</FieldLabel>
+                <input type="number" step="0.1" min="0" max="2" value={wizard.temperature}
+                  onChange={(e) => setWizard((w) => ({ ...w, temperature: parseFloat(e.target.value) || 0.3 }))}
+                  className="tn-input tn-mono" />
+              </label>
+              <label className="block">
+                <FieldLabel>Budget ($)</FieldLabel>
+                <input type="number" step="0.01" value={wizard.budget} onChange={(e) => setWizard((w) => ({ ...w, budget: e.target.value }))}
+                  placeholder="Unlimited"
+                  className="tn-input tn-mono" />
+              </label>
+              <label className="block">
+                <FieldLabel>Schedule Type</FieldLabel>
+                <select value={wizard.scheduleType} onChange={(e) => setWizard((w) => ({ ...w, scheduleType: e.target.value, scheduleValue: e.target.value === 'manual' ? '' : w.scheduleValue }))}
+                  className="tn-select">
+                  <option value="manual">Manual</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="hourly">Every N hours</option>
+                  <option value="cron">Custom (cron)</option>
+                </select>
+              </label>
             </div>
           </details>
 
           {/* Launch */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="tn-btn">
+              Cancel
+            </button>
             <button
               onClick={handleLaunch}
               disabled={launching || !wizard.name.trim()}
-              className="flex-1 py-2.5 rounded-lg text-sm font-semibold"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)', opacity: launching || !wizard.name.trim() ? 0.5 : 1 }}
+              className="tn-btn tn-btn-primary flex-1"
             >
               {launching ? 'Creating...' : 'Launch Agent'}
-            </button>
-            <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm" style={{ border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}>
-              Cancel
             </button>
           </div>
         </div>
@@ -1147,27 +1087,27 @@ function OverflowMenu({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="p-1 rounded cursor-pointer"
-        style={{ color: 'var(--color-text-tertiary)' }}
+        className="tn-icon-btn"
         title="More actions"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
-        <MoreHorizontal size={14} />
+        <MoreHorizontal size={16} />
       </button>
       {open && (
-        <div
-          className="absolute right-0 top-6 z-20 rounded-lg py-1 min-w-[120px]"
-          style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-        >
+        <div role="menu" className="tn-panel tn-rule-top absolute right-0 top-9 z-20 py-1 min-w-[140px]">
           <button
+            role="menuitem"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(agentId);
               setOpen(false);
             }}
-            className="w-full text-left px-3 py-1.5 text-xs cursor-pointer flex items-center gap-2"
-            style={{ color: 'var(--color-error)' }}
+            className="w-full text-left px-3 h-8 text-[13px] cursor-pointer flex items-center gap-2 transition-colors hover:bg-[var(--color-bg-tertiary)]"
+            style={{ color: 'var(--fail)' }}
           >
-            <Trash2 size={12} /> Delete
+            <Trash2 size={13} /> Delete
           </button>
         </div>
       )}
@@ -1204,131 +1144,132 @@ function AgentCard({
   const canResume = agent.status === 'paused';
   const canRecover = agent.status === 'error' || agent.status === 'stalled' || agent.status === 'needs_attention';
 
+  const line = agentLine(agent);
+  const model = (agent.config?.model as string) || '';
+  const { type: scheduleType } = getAgentSchedule(agent);
+  const isManual = !scheduleType || scheduleType === 'manual';
+  const maxCost = agent.config?.max_cost as number;
+  const budgetRatio = maxCost > 0 ? (agent.total_cost ?? 0) / maxCost : 0;
+  const tokens = agent.total_tokens ?? (agent.input_tokens ?? 0) + (agent.output_tokens ?? 0);
+
   return (
-    <div
+    <li
       onClick={onClick}
-      className="p-4 rounded-lg cursor-pointer transition-colors"
-      style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+      className="grid gap-x-8 gap-y-4 px-3 py-4 cursor-pointer transition-colors hover:bg-[var(--color-bg-secondary)] lg:grid-cols-[minmax(0,1fr)_minmax(200px,260px)_200px_auto] lg:items-center"
+      style={{ borderBottom: '1px solid var(--color-border)' }}
     >
-      {/* Row 1: Name + status dot */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Bot size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-          <span className="font-medium text-sm truncate" style={{ color: 'var(--color-text)' }}>
+      {/* Identity: the agent's bullet in its line colour, name, status, model */}
+      <div className="flex items-start gap-3 min-w-0">
+        <LineBullet letter={bulletLetter(agent.name)} line={line} size={28} />
+        <div className="min-w-0">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+            className="block max-w-full truncate text-left text-[15px] leading-5 font-semibold cursor-pointer hover:underline underline-offset-4"
+            style={{ color: 'var(--color-text)' }}
+          >
             {agent.name}
+          </button>
+          <div className="flex items-center gap-x-3 gap-y-1 mt-1 flex-wrap min-w-0">
+            <StatusBadge status={agent.status} line={line} />
+            {model && (
+              <span className="tn-mono text-[12px] truncate min-w-0" style={{ color: 'var(--color-text-tertiary)' }}>{model}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Route: last run (filled) to the schedule (open) on the agent's line */}
+      <div className="min-w-0">
+        <div className="flex items-center h-[14px]">
+          <Station line={line} state={agent.last_run_at ? 'current' : 'unavailable'} className="relative z-[1]" />
+          <span aria-hidden="true" className="flex-1 h-[5px] -mx-0.5" style={{ background: lineColor(line) }} />
+          <Station line={line} state={isManual ? 'unavailable' : 'open'} className="relative z-[1]" />
+        </div>
+        <div className="flex justify-between gap-4 mt-1.5 text-[12px] leading-4">
+          <span className="min-w-0">
+            <span className="block text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Last run</span>
+            <span className="block tn-mono truncate" style={{ color: 'var(--color-text-secondary)' }}>{formatRelativeTime(agent.last_run_at)}</span>
+          </span>
+          <span className="min-w-0 text-right">
+            <span className="block text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>Schedule</span>
+            <span className="block truncate" style={{ color: 'var(--color-text-secondary)' }}>{formatAgentSchedule(agent)}</span>
           </span>
         </div>
-        <StatusDot status={agent.status} />
-      </div>
-
-      {/* Row 2: Schedule + last run */}
-      <div className="text-xs mb-2 flex items-center gap-3" style={{ color: 'var(--color-text-tertiary)' }}>
-        <span>{formatAgentSchedule(agent)}</span>
-        <span>·</span>
-        <span>Last run: {formatRelativeTime(agent.last_run_at)}</span>
-      </div>
-
-      {/* Row 3: Stats */}
-      <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-        <span className="flex items-center gap-1">
-          <Activity size={11} />
-          {agent.total_runs ?? 0} runs
-        </span>
-        <span className="flex items-center gap-1">
-          <DollarSign size={11} />
-          {formatCost(agent.total_cost)}
-        </span>
-      </div>
-
-      {/* Budget progress bar */}
-      {(agent.config?.max_cost as number) > 0 && (
-        <div className="mb-3">
-          <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>
-            <span>Budget</span>
-            <span>
-              {formatCost(agent.total_cost)} / ${(agent.config?.max_cost as number).toFixed(0)}
-            </span>
+        {maxCost > 0 && (
+          <div className="mt-2.5">
+            <div className="h-[5px]" style={{ background: 'var(--color-bg-tertiary)' }}>
+              <div
+                className="h-full transition-[width] duration-200 ease-out"
+                style={{
+                  width: `${Math.min(100, budgetRatio * 100)}%`,
+                  background: budgetRatio > 0.9 ? 'var(--fail)' : lineColor(line),
+                }}
+              />
+            </div>
+            <div className="flex justify-between mt-1 text-[11px] leading-4" style={{ color: 'var(--color-text-tertiary)' }}>
+              <span>Budget</span>
+              <span className="tn-mono" style={{ color: budgetRatio > 0.9 ? 'var(--fail)' : 'var(--color-text-secondary)' }}>
+                {formatCost(agent.total_cost)} / ${maxCost.toFixed(0)}
+              </span>
+            </div>
           </div>
-          <div className="w-full rounded-full h-1.5" style={{ background: 'var(--color-bg)' }}>
-            <div
-              className="h-1.5 rounded-full transition-all"
-              style={{
-                width: `${Math.min(100, ((agent.total_cost ?? 0) / (agent.config?.max_cost as number)) * 100)}%`,
-                background:
-                  ((agent.total_cost ?? 0) / (agent.config?.max_cost as number)) > 0.9
-                    ? 'var(--color-error)'
-                    : ((agent.total_cost ?? 0) / (agent.config?.max_cost as number)) > 0.75
-                      ? 'var(--color-warning)'
-                      : 'var(--color-success)',
-              }}
-            />
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Row 4: Actions */}
-      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      {/* Figures */}
+      <dl className="grid grid-cols-3 gap-3">
+        {([
+          ['Runs', String(agent.total_runs ?? 0)],
+          ['Cost', formatCost(agent.total_cost)],
+          ['Tokens', tokens.toLocaleString()],
+        ] as const).map(([label, value]) => (
+          <div key={label} className="flex flex-col min-w-0">
+            <dt className="order-2 text-[11px] leading-4" style={{ color: 'var(--color-text-tertiary)' }}>{label}</dt>
+            <dd className="order-1 tn-mono text-[13px] leading-5 truncate" style={{ color: 'var(--color-text)' }}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 flex-wrap lg:justify-end" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={(e) => { e.stopPropagation(); onChat(agent.id); }}
-          className="p-1.5 rounded cursor-pointer transition-colors"
-          style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+          className="tn-icon-btn"
           title="Chat with agent"
+          aria-label="Chat with agent"
         >
-          <MessageSquare size={13} />
+          <MessageSquare size={15} />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(agent.id); }}
-          className="p-1.5 rounded cursor-pointer transition-colors"
-          style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}
+          className="tn-icon-btn"
           title="Edit agent"
+          aria-label="Edit agent"
         >
-          <Pencil size={13} />
-        </button>
-        <button
-          onClick={() => onRun(agent.id)}
-          className="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors"
-          style={{ background: 'var(--color-accent)' + '15', color: 'var(--color-accent)' }}
-          title="Run now"
-        >
-          <Zap size={11} /> Run Now
+          <Pencil size={15} />
         </button>
         {canPause && (
-          <button
-            onClick={() => onPause(agent.id)}
-            className="p-1 rounded cursor-pointer"
-            style={{ color: 'var(--color-text-secondary)' }}
-            title="Pause"
-          >
-            <Pause size={13} />
+          <button onClick={() => onPause(agent.id)} className="tn-icon-btn" title="Pause" aria-label="Pause">
+            <Pause size={15} />
           </button>
         )}
         {canResume && (
-          <button
-            onClick={() => onResume(agent.id)}
-            className="p-1 rounded cursor-pointer"
-            style={{ color: 'var(--color-success)' }}
-            title="Resume"
-          >
-            <Play size={13} />
+          <button onClick={() => onResume(agent.id)} className="tn-icon-btn" title="Resume" aria-label="Resume">
+            <Play size={15} />
           </button>
         )}
         {canRecover && (
-          <button
-            onClick={() => onRecover(agent.id)}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer"
-            style={{ background: 'var(--color-error)20', color: 'var(--color-error)' }}
-            title="Recover agent"
-          >
-            <AlertTriangle size={11} /> Recover
+          <button onClick={() => onRecover(agent.id)} className="tn-btn tn-btn-sm" title="Recover agent">
+            <AlertTriangle size={13} style={{ color: 'var(--fail)' }} /> Recover
           </button>
         )}
-        <div className="ml-auto">
-          <OverflowMenu agentId={agent.id} onDelete={onDelete} />
-        </div>
+        <button onClick={() => onRun(agent.id)} className="tn-btn tn-btn-sm" title="Run now">
+          <Zap size={13} /> Run Now
+        </button>
+        <OverflowMenu agentId={agent.id} onDelete={onDelete} />
       </div>
-    </div>
+    </li>
   );
 }
 
@@ -1351,43 +1292,42 @@ function AgentInstructionSection({ agent, onAgentUpdated }: { agent: ManagedAgen
   }
 
   return (
-    <div
-      className="p-3 rounded-lg"
-      style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Instruction</h3>
-        {!editing && (
+    <section>
+      <SectionHeading
+        actions={!editing && (
           <button
             onClick={() => { setDraft(currentInstruction); setEditing(true); }}
-            className="text-xs px-2 py-0.5 rounded cursor-pointer"
-            style={{ color: 'var(--color-accent)', border: '1px solid var(--color-accent)', opacity: 0.8 }}
+            className="tn-btn tn-btn-sm tn-btn-ghost"
           >
-            Edit
+            <Pencil size={13} /> Edit
           </button>
         )}
-      </div>
-      {editing ? (
-        <div className="space-y-2">
-          <textarea
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg text-sm bg-transparent resize-none"
-            style={{ border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-          />
-          <div className="flex gap-2">
-            <button onClick={save} className="text-xs px-3 py-1 rounded font-medium cursor-pointer" style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}>Save</button>
-            <button onClick={() => setEditing(false)} className="text-xs px-3 py-1 rounded cursor-pointer" style={{ color: 'var(--color-text-tertiary)', border: '1px solid var(--color-border)' }}>Cancel</button>
+      >
+        Instruction
+      </SectionHeading>
+      <div className="mt-3">
+        {editing ? (
+          <div className="space-y-2">
+            <textarea
+              autoFocus
+              aria-label="Instruction"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={3}
+              className="tn-textarea resize-none"
+            />
+            <div className="flex gap-2">
+              <button onClick={save} className="tn-btn tn-btn-sm tn-btn-primary">Save</button>
+              <button onClick={() => setEditing(false)} className="tn-btn tn-btn-sm">Cancel</button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <p className="text-sm" style={{ color: currentInstruction ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}>
-          {currentInstruction || '(No instruction set — click Edit to add one)'}
-        </p>
-      )}
-    </div>
+        ) : (
+          <p className="text-[15px] leading-[22px] max-w-[72ch] whitespace-pre-wrap" style={{ color: currentInstruction ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}>
+            {currentInstruction || '(No instruction set — click Edit to add one)'}
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1456,24 +1396,26 @@ function AgentConfigGrid({ agent, onAgentUpdated }: { agent: ManagedAgent; onAge
     setChangingModel(false);
   }
 
-  const modelStatusDot = modelAvailable === 'available'
-    ? 'var(--color-success)'
+  const modelLine = lineForModel(currentModel === '(default)' ? '' : currentModel);
+  const modelState: StationState = modelAvailable === 'available'
+    ? 'current'
     : modelAvailable === 'unavailable'
-      ? 'var(--color-error)'
-      : 'var(--color-text-tertiary)';
+      ? 'failed'
+      : 'unavailable';
 
   const rows: [string, React.ReactNode][] = [
     ['Intelligence', editingModel ? (
       changingModel ? (
-        <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Switching model...</span>
+        <span className="text-[14px]" style={{ color: 'var(--color-text-tertiary)' }}>Switching model...</span>
       ) : (
         <select
           autoFocus
+          aria-label="Intelligence"
           defaultValue={currentModel}
           onChange={(e) => changeModel(e.target.value)}
           onBlur={() => setEditingModel(false)}
-          className="text-sm rounded px-1 py-0.5"
-          style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+          className="tn-select tn-mono"
+          style={{ maxWidth: 320 }}
         >
           {models.map((m) => {
             const installed = isModelInstalled(m);
@@ -1486,55 +1428,41 @@ function AgentConfigGrid({ agent, onAgentUpdated }: { agent: ManagedAgent; onAge
         </select>
       )
     ) : (
-      <span className="flex items-center gap-2">
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: modelStatusDot,
-            display: 'inline-block',
-            flexShrink: 0,
-          }}
-          title={
+      <span className="flex items-center gap-2 flex-wrap min-w-0">
+        <Station
+          line={modelLine}
+          state={modelState}
+          label={
             modelAvailable === 'available' ? 'Model running'
               : modelAvailable === 'unavailable' ? 'Model not available'
                 : 'Could not check model status'
           }
         />
-        <span style={{ color: 'var(--color-text)' }}>{currentModel}</span>
+        <span className="tn-mono truncate" style={{ color: 'var(--color-text)' }}>{currentModel}</span>
         {modelAvailable === 'unavailable' && (
-          <span className="text-xs" style={{ color: 'var(--color-error)' }}>Not available</span>
+          <StatusText tone="fail">Not available</StatusText>
         )}
-        <button
-          onClick={startEditingModel}
-          className="text-xs px-2 py-0.5 rounded cursor-pointer"
-          style={{
-            color: modelAvailable === 'unavailable' ? 'var(--color-error)' : 'var(--color-accent)',
-            border: `1px solid ${modelAvailable === 'unavailable' ? 'var(--color-error)' : 'var(--color-accent)'}`,
-            opacity: 0.8,
-          }}
-        >
+        <button onClick={startEditingModel} className="tn-btn tn-btn-sm tn-btn-ghost">
           Change
         </button>
       </span>
     )],
-    ['Agent Type', <span key="at">{agent.agent_type}</span>],
+    ['Agent Type', <span key="at" className="tn-mono">{agent.agent_type}</span>],
     ['Schedule', <span key="sc">{formatAgentSchedule(agent)}</span>],
-    ['Last Run', <span key="lr">{formatRelativeTime(agent.last_run_at)}</span>],
-    ['Budget', <span key="bg">{agent.budget ? formatCost(agent.budget) : 'Unlimited'}</span>],
+    ['Last Run', <span key="lr" className="tn-mono">{formatRelativeTime(agent.last_run_at)}</span>],
+    ['Budget', <span key="bg" className="tn-mono">{agent.budget ? formatCost(agent.budget) : 'Unlimited'}</span>],
     ['Learning', <span key="le">{agent.learning_enabled ? 'Enabled' : 'Disabled'}</span>],
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
       {rows.map(([label, value]) => (
-        <div key={label as string} className="flex gap-2 items-center text-sm">
-          <span className="font-medium" style={{ color: 'var(--color-text-secondary)', minWidth: 110 }}>{label}</span>
-          <span style={{ color: 'var(--color-text)' }}>{value}</span>
+        <div key={label as string} className="flex gap-3 items-center text-[14px] min-h-[44px] py-1.5" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <dt className="shrink-0" style={{ color: 'var(--color-text-secondary)', width: 104 }}>{label}</dt>
+          <dd className="min-w-0 flex-1" style={{ color: 'var(--color-text)' }}>{value}</dd>
         </div>
       ))}
-    </div>
+    </dl>
   );
 }
 
@@ -1787,67 +1715,104 @@ function InteractTab({ agentId, agentStatus, onRunStateChange }: { agentId: stri
   const isBusy = running || sending;
   const findings = agent?.summary_memory?.trim() || '';
   const traceSteps = lastTrace?.steps ?? [];
+  const model = (agent?.config?.model as string) || '';
+
+  // The run drawn as a route: this device, each tool call, then the model.
+  const shownTools: ToolCallInfo[] = isBusy
+    ? liveItems.flatMap((it) => (it.kind === 'tool' ? [it.tool] : []))
+    : traceSteps.map((s, i) => stepToToolCall(s, i));
+  const traceFailed = !isBusy && !!lastTrace && lastTrace.outcome !== 'success';
+  const routeStops: RouteStop[] = isBusy || lastTrace
+    ? [
+        { id: 'device', kind: 'device', line: 'local', label: 'This device' },
+        ...shownTools.map((tc): RouteStop => ({
+          id: tc.id,
+          kind: 'tool',
+          line: 'tools',
+          label: tc.tool,
+          detail: [tc.status, tc.latency != null ? formatMs(tc.latency) : ''].filter(Boolean).join(' · '),
+          state: tc.status === 'error' ? 'failed' : tc.status === 'running' ? 'current' : undefined,
+          rows: [
+            { label: 'Tool', value: tc.tool },
+            { label: 'Status', value: tc.status },
+            ...(tc.latency != null ? [{ label: 'Latency', value: formatMs(tc.latency) }] : []),
+          ],
+        })),
+        ...(model
+          ? [{
+              id: 'model',
+              kind: 'model' as const,
+              line: lineForModel(model),
+              label: model,
+              detail: !isBusy && lastTrace ? `${lastTrace.outcome} · ${lastTrace.duration.toFixed(1)}s` : undefined,
+              state: traceFailed ? ('failed' as const) : undefined,
+              rows: !isBusy && lastTrace
+                ? [
+                    { label: 'Outcome', value: lastTrace.outcome },
+                    { label: 'Duration', value: `${lastTrace.duration.toFixed(1)}s` },
+                    { label: 'Steps', value: String(lastTrace.steps.length) },
+                  ]
+                : undefined,
+            }]
+          : []),
+      ]
+    : [];
 
   return (
     <div className="flex flex-col" style={{ minHeight: 360 }}>
       {/* ── Trace area header ──────────────────────────────── */}
-      <div className="flex items-center justify-between mb-2">
-        <div
-          className="flex items-center gap-2 text-sm font-medium"
-          style={{ color: 'var(--color-text)' }}
-        >
-          <Activity size={14} style={{ color: 'var(--color-accent)' }} />
-          Activity trace
-        </div>
-        <div
-          className="flex items-center gap-2 text-xs"
-          style={{ color: 'var(--color-text-tertiary)' }}
-        >
-          {isBusy ? (
-            <>
-              <span
-                className="inline-block w-2 h-2 rounded-full animate-pulse"
-                style={{ background: 'var(--color-accent)' }}
-              />
-              Running{elapsedMs > 0 ? ` · ${(elapsedMs / 1000).toFixed(1)}s` : ''}
-            </>
-          ) : (
-            <>
-              {agent?.last_run_at
-                ? `Last run ${new Date(agent.last_run_at * 1000).toLocaleString()}`
-                : 'Idle'}
-              {lastTrace && ` · ${lastTrace.outcome}`}
-            </>
-          )}
-        </div>
-      </div>
+      <SectionHeading
+        actions={
+          <span className="flex items-center gap-2 tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+            {isBusy ? (
+              <>
+                <Station line={model ? lineForModel(model) : 'local'} state="current" size={12} />
+                Running{elapsedMs > 0 ? ` · ${(elapsedMs / 1000).toFixed(1)}s` : ''}
+              </>
+            ) : (
+              <>
+                {agent?.last_run_at
+                  ? `Last run ${new Date(agent.last_run_at * 1000).toLocaleString()}`
+                  : 'Idle'}
+                {lastTrace && (
+                  <span style={{ color: traceFailed ? 'var(--fail)' : undefined }}>{` · ${lastTrace.outcome}`}</span>
+                )}
+              </>
+            )}
+          </span>
+        }
+      >
+        Activity trace
+      </SectionHeading>
 
       {/* ── Trace area body ────────────────────────────────── */}
       <div
-        className="flex-1 overflow-y-auto rounded-lg p-3 space-y-3"
+        className="flex-1 overflow-y-auto mt-3 p-4 space-y-4"
         style={{
-          background: 'var(--color-bg-secondary)',
+          ...SURFACE_STATIONS,
+          background: 'var(--color-surface)',
           border: '1px solid var(--color-border)',
+          borderRadius: 2,
           maxHeight: 'calc(100vh - 360px)',
           minHeight: 200,
         }}
       >
         {question && (
-          <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          <div className="text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
             <span style={{ color: 'var(--color-text-secondary)' }}>Question:</span> {question}
           </div>
         )}
 
         {errorMsg && (
-          <div
-            className="text-sm px-3 py-2 rounded-lg"
-            style={{
-              background: 'rgba(255,80,80,0.08)',
-              border: '1px solid var(--color-error)',
-              color: 'var(--color-error)',
-            }}
-          >
+          <div role="alert" className="flex items-start gap-2 text-[14px] pt-2" style={{ borderTop: 'var(--rule-bar) solid var(--fail)', color: 'var(--fail)' }}>
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
             {errorMsg}
+          </div>
+        )}
+
+        {routeStops.length > 0 && (
+          <div className="pb-1">
+            <RouteStrip stops={routeStops} live={isBusy} label="Run route" />
           </div>
         )}
 
@@ -1858,24 +1823,14 @@ function InteractTab({ agentId, agentStatus, onRunStateChange }: { agentId: stri
               it.kind === 'tool' ? (
                 <ToolCallCard key={it.id} toolCall={it.tool} />
               ) : (
-                <div
-                  key={it.id}
-                  className="flex items-center gap-2 text-sm"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                >
-                  <span
-                    className="inline-block w-2 h-2 rounded-full animate-pulse"
-                    style={{ background: 'var(--color-accent)' }}
-                  />
+                <div key={it.id} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+                  <Station line="local" state="open" size={10} />
                   {it.label}
                 </div>
               ),
             )}
-            <div
-              className="flex items-center gap-2 text-sm"
-              style={{ color: 'var(--color-text-secondary)' }}
-            >
-              <Loader2 size={13} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
+            <div className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+              <Station line={model ? lineForModel(model) : 'local'} state="current" size={10} />
               {activity || 'Agent is working…'}
             </div>
           </>
@@ -1890,27 +1845,17 @@ function InteractTab({ agentId, agentStatus, onRunStateChange }: { agentId: stri
               </div>
             )}
             {findings ? (
-              <div
-                className="px-3 py-2 rounded-lg text-sm"
-                style={{
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)',
-                }}
-              >
-                <div className="text-xs mb-1" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="pt-3" style={{ borderTop: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                <div className="text-[12px] font-semibold uppercase tracking-[0.06em] mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                   Result
                 </div>
-                <div className="prose prose-sm prose-invert max-w-none">
+                <div className="prose prose-sm max-w-[72ch]">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{findings}</ReactMarkdown>
                 </div>
               </div>
             ) : (
               traceSteps.length === 0 && (
-                <div
-                  className="text-sm text-center py-8"
-                  style={{ color: 'var(--color-text-tertiary)' }}
-                >
+                <div className="text-[14px] text-center py-10" style={{ color: 'var(--color-text-tertiary)' }}>
                   No runs yet. Ask a question below to run the agent.
                 </div>
               )
@@ -1921,7 +1866,10 @@ function InteractTab({ agentId, agentStatus, onRunStateChange }: { agentId: stri
       </div>
 
       {/* ── Follow-up chat input ───────────────────────────── */}
-      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+      <div
+        className="mt-4 border-2 border-[var(--color-input-border)] transition-colors focus-within:border-[var(--action)]"
+        style={{ background: 'var(--color-input-bg)', borderRadius: 2 }}
+      >
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -1931,31 +1879,22 @@ function InteractTab({ agentId, agentStatus, onRunStateChange }: { agentId: stri
               handleAsk();
             }
           }}
+          aria-label="Ask a follow-up"
           placeholder={isBusy ? 'Agent is running…' : "Ask a follow-up about this agent's work…"}
           disabled={isBusy}
-          className="w-full px-3 py-2 rounded-lg text-sm bg-transparent outline-none resize-none"
-          style={{
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text)',
-            minHeight: 64,
-            opacity: isBusy ? 0.6 : 1,
-          }}
+          className="block w-full px-3 pt-3 pb-1 bg-transparent outline-none resize-none text-[15px] leading-[22px] disabled:cursor-not-allowed"
+          style={{ color: 'var(--color-text)', minHeight: 64, opacity: isBusy ? 0.6 : 1 }}
         />
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+        <div className="flex items-center justify-between gap-3 px-3 pb-3">
+          <span className="text-[12px] leading-4" style={{ color: 'var(--color-text-tertiary)' }}>
             Sends your question as an ad-hoc run — results appear in the trace above.
           </span>
           <button
             onClick={handleAsk}
             disabled={isBusy || !input.trim()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm cursor-pointer font-medium"
-            style={{
-              background: 'var(--color-accent)',
-              color: 'var(--color-on-accent)',
-              opacity: isBusy || !input.trim() ? 0.5 : 1,
-            }}
+            className="tn-btn tn-btn-primary shrink-0"
           >
-            {isBusy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            <Send size={14} />
             {isBusy ? 'Running' : 'Ask'}
           </button>
         </div>
@@ -2028,225 +1967,116 @@ function ChannelsTab({ agentId }: { agentId: string }) {
   const getMeta = (id: string) =>
     SOURCE_CATALOG.find((s) => s.connector_id === id);
 
-  const iconMap: Record<string, string> = {
-    gmail: '\u2709\uFE0F', gmail_imap: '\u2709\uFE0F', slack: '#',
-    imessage: '\uD83D\uDCAC', gdrive: '\uD83D\uDCC1', notion: '\uD83D\uDCC4',
-    obsidian: '\uD83D\uDCC1', granola: '\uD83C\uDF99\uFE0F', gcalendar: '\uD83D\uDCC5',
-    gcontacts: '\uD83D\uDCC7', outlook: '\u2709\uFE0F', apple_notes: '\uD83C\uDF4E',
-    dropbox: '\uD83D\uDCE6', whatsapp: '\uD83D\uDCF1',
-  };
+  const all = [...connected, ...notConnected];
+
+  const renderSteps = (meta: (typeof SOURCE_CATALOG)[number] | undefined) =>
+    meta?.steps && (
+      <ol className="list-none mb-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+        {meta.steps.map((step, i) => (
+          <li key={i} className="flex gap-3 py-2 text-[13px]" style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <span className="tn-mono text-[11px] leading-5 shrink-0" style={{ color: 'var(--color-text-tertiary)', width: 48 }}>
+              STEP {i + 1}
+            </span>
+            <span className="min-w-0 leading-5">
+              <span className="block">{step.label}</span>
+              {step.url && (
+                <a
+                  href={step.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[12px] underline underline-offset-2"
+                  style={{ color: 'var(--action)' }}
+                >
+                  {step.urlLabel || 'Open'} <ArrowUpRight size={12} />
+                </a>
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+    );
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{
-        color: 'var(--color-text-secondary)',
-        fontSize: 12, marginBottom: 12,
-      }}>
+    <div className="py-2">
+      <p className="text-[14px] mb-4" style={{ color: 'var(--color-text-secondary)' }}>
         Data sources your agent can search across
-      </div>
+      </p>
 
-      {/* Connected sources grid */}
-      {connected.length > 0 && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 6, marginBottom: 12,
-        }}>
-          {connected.map((c) => {
-            const meta = SOURCE_CATALOG.find(s => s.connector_id === c.connector_id);
-            const unit = meta?.unitLabel || 'items';
-            const isReconnecting = expandedId === c.connector_id;
-            return (
-            <div
-              key={c.connector_id}
-              style={{
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)',
-                borderRadius: 6,
-                overflow: 'hidden',
-                gridColumn: isReconnecting ? '1 / -1' : undefined,
-              }}
-            >
-              <div style={{
-                padding: '12px 14px',
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}>
-                <span style={{ fontSize: 20 }}>{iconMap[c.connector_id] || '\uD83D\uDD17'}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>
-                    {c.display_name}
-                  </div>
-                  <div style={{ fontSize: 12, color: c.chunks > 0 ? 'var(--color-success)' : 'var(--color-warning)' }}>
-                    {c.chunks > 0
-                      ? `${c.chunks.toLocaleString()} ${unit}`
-                      : 'Connected — no data synced yet'}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setExpandedId(isReconnecting ? null : c.connector_id)}
-                  style={{
-                    fontSize: 10, padding: '3px 10px',
-                    background: 'transparent',
-                    color: 'var(--color-text-secondary)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 4, cursor: 'pointer',
-                  }}
-                >
-                  {isReconnecting ? 'Cancel' : 'Reconnect'}
-                </button>
-              </div>
-              {isReconnecting && meta?.steps && (
-                <div style={{
-                  borderTop: '1px solid var(--color-border)',
-                  padding: 12,
-                }}>
-                  <div style={{
-                    fontSize: 12, color: 'var(--color-warning)',
-                    marginBottom: 8,
-                  }}>
-                    Re-enter credentials to reconnect this source.
-                  </div>
-                  {meta.steps.map((step, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        background: 'var(--color-bg)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 6, padding: 10,
-                        marginBottom: 8,
-                      }}
+      {all.length > 0 && (
+        <ul className="list-none max-w-3xl" aria-label="Data sources">
+          {all.map((c, idx) => {
+            const meta = getMeta(c.connector_id);
+            const isOpen = expandedId === c.connector_id;
+            const first = idx === 0;
+            const last = idx === all.length - 1;
+
+            if (c.connected) {
+              const unit = meta?.unitLabel || 'items';
+              return (
+                <RailItem key={c.connector_id} line="data" state="current" first={first} last={last}>
+                  <div className="flex items-center gap-3 py-3 min-h-[44px]">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[14px] leading-5 font-semibold truncate">{c.display_name}</div>
+                      <div className="tn-mono text-[12px] leading-4" style={{ color: 'var(--color-text-secondary)' }}>
+                        {c.chunks > 0
+                          ? `${c.chunks.toLocaleString()} ${unit}`
+                          : 'Connected — no data synced yet'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setExpandedId(isOpen ? null : c.connector_id)}
+                      className="tn-btn tn-btn-sm"
                     >
-                      <div style={{
-                        color: 'var(--color-accent-purple)', fontSize: 10,
-                        fontWeight: 600, marginBottom: 3,
-                      }}>
-                        STEP {i + 1}
-                      </div>
-                      <div style={{ fontSize: 12, marginBottom: step.url ? 4 : 0 }}>
-                        {step.label}
-                      </div>
-                      {step.url && (
-                        <a
-                          href={step.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: 'var(--color-accent)', fontSize: 11,
-                            textDecoration: 'underline',
-                          }}
-                        >
-                          {step.urlLabel || 'Open'} →
-                        </a>
+                      {isOpen ? 'Cancel' : 'Reconnect'}
+                    </button>
+                  </div>
+                  {isOpen && meta?.steps && (
+                    <div className="pb-4">
+                      <p className="text-[13px] mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                        Re-enter credentials to reconnect this source.
+                      </p>
+                      {renderSteps(meta)}
+                      {meta.inputFields && (
+                        <InlineConnectForm
+                          fields={meta.inputFields}
+                          loading={loading}
+                          onSubmit={(req) => handleConnect(c.connector_id, req)}
+                        />
                       )}
                     </div>
-                  ))}
-                  {meta.inputFields && (
-                    <InlineConnectForm
-                      fields={meta.inputFields}
-                      loading={loading}
-                      onSubmit={(req) => handleConnect(c.connector_id, req)}
-                    />
                   )}
-                </div>
-              )}
-            </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Not connected grid */}
-      {notConnected.length > 0 && (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 6,
-        }}>
-          {notConnected.map((c) => {
-            const meta = getMeta(c.connector_id);
-            const isExpanded = expandedId === c.connector_id;
+                </RailItem>
+              );
+            }
 
             return (
-              <div
-                key={c.connector_id}
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px dashed var(--color-border)',
-                  borderRadius: 6, overflow: 'hidden',
-                  opacity: isExpanded ? 1 : 0.6,
-                  gridColumn: isExpanded ? '1 / -1' : undefined,
-                }}
-              >
-                <div
-                  style={{
-                    padding: '12px 14px', display: 'flex',
-                    alignItems: 'center', gap: 8,
-                    cursor: 'pointer',
-                  }}
-                  onClick={() =>
-                    setExpandedId(isExpanded ? null : c.connector_id)
-                  }
+              <RailItem key={c.connector_id} line="data" state="open" first={first} last={last}>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setExpandedId(isOpen ? null : c.connector_id)}
+                  className="w-full flex items-center gap-3 py-3 min-h-[44px] text-left cursor-pointer group"
                 >
-                  <span style={{ fontSize: 20 }}>{iconMap[c.connector_id] || '\uD83D\uDD17'}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600,
-                      color: 'var(--color-text-secondary)' }}>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[14px] leading-5 font-semibold truncate" style={{ color: 'var(--color-text-secondary)' }}>
                       {c.display_name}
-                    </div>
-                    <div style={{ fontSize: 12,
-                      color: 'var(--color-text-secondary)' }}>
+                    </span>
+                    <span className="block text-[12px] leading-4" style={{ color: 'var(--color-text-tertiary)' }}>
                       Not connected
-                    </div>
-                  </div>
-                  <span style={{
-                    color: 'var(--color-accent-purple)', fontSize: 11, fontWeight: 500,
-                  }}>
-                    {isExpanded ? '\u2715 Close' : '+ Add'}
+                    </span>
                   </span>
-                </div>
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[13px] font-medium group-hover:underline underline-offset-4"
+                    style={{ color: 'var(--color-text)' }}
+                  >
+                    {isOpen ? <><X size={13} /> Close</> : <><Plus size={13} /> Add</>}
+                  </span>
+                </button>
 
                 {/* Inline setup panel */}
-                {isExpanded && meta?.steps && (
-                  <div style={{
-                    borderTop: '1px solid var(--color-border)',
-                    padding: 12,
-                  }}>
-                    {meta.steps.map((step, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: 'var(--color-bg)',
-                          border: '1px solid var(--color-border)',
-                          borderRadius: 6, padding: 10,
-                          marginBottom: 8,
-                        }}
-                      >
-                        <div style={{
-                          color: 'var(--color-accent-purple)', fontSize: 10,
-                          fontWeight: 600, marginBottom: 3,
-                        }}>
-                          STEP {i + 1}
-                        </div>
-                        <div style={{
-                          fontSize: 12, marginBottom: step.url ? 4 : 0,
-                        }}>
-                          {step.label}
-                        </div>
-                        {step.url && (
-                          <a
-                            href={step.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              color: 'var(--color-accent)', fontSize: 11,
-                              textDecoration: 'underline',
-                            }}
-                          >
-                            {step.urlLabel || 'Open'} {'\u2192'}
-                          </a>
-                        )}
-                      </div>
-                    ))}
+                {isOpen && meta?.steps && (
+                  <div className="pb-4">
+                    {renderSteps(meta)}
                     {meta.inputFields && (
                       <InlineConnectForm
                         fields={meta.inputFields}
@@ -2256,18 +2086,15 @@ function ChannelsTab({ agentId }: { agentId: string }) {
                         }
                       />
                     )}
-                    <div style={{
-                      fontSize: 10, color: 'var(--color-text-secondary)',
-                      textAlign: 'center', marginTop: 8,
-                    }}>
-                      {'\uD83D\uDD12'} Read-only access {'\u00B7'} No data leaves your device
+                    <div className="flex items-center gap-1.5 text-[12px] mt-3" style={{ color: 'var(--color-text-tertiary)' }}>
+                      <Lock size={12} /> Read-only access · No data leaves your device
                     </div>
                   </div>
                 )}
-              </div>
+              </RailItem>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -2306,33 +2133,22 @@ function InlineConnectForm({
   };
 
   return (
-    <div>
+    <div className="space-y-2 max-w-md">
       {fields.map((f) => (
         <input
           key={f.name}
           value={inputs[f.name] || ''}
           onChange={(e) => update(f.name, e.target.value)}
           placeholder={f.placeholder}
+          aria-label={f.placeholder}
           type={f.type || 'text'}
-          style={{
-            width: '100%', padding: '7px 10px',
-            background: 'var(--color-bg)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 4, color: 'var(--color-text)',
-            fontSize: 12, marginBottom: 6,
-            boxSizing: 'border-box',
-          }}
+          className="tn-input"
         />
       ))}
       <button
         onClick={submit}
         disabled={loading || !allFilled}
-        style={{
-          width: '100%', padding: 8,
-          background: loading || !allFilled ? 'var(--color-disabled-bg)' : 'var(--color-accent-purple)',
-          color: 'var(--color-on-accent)', border: 'none',
-          borderRadius: 6, fontSize: 12, cursor: 'pointer',
-        }}
+        className="tn-btn tn-btn-primary w-full"
       >
         {loading ? 'Connecting...' : 'Connect'}
       </button>
@@ -2415,56 +2231,42 @@ function SendBlueWebhookStep({
   };
 
   return (
-    <div style={{ borderTop: '1px solid var(--color-border)', padding: 14, background: 'var(--color-bg)' }}>
-      <div style={{
-        background: 'color-mix(in srgb, var(--color-success) 10%, var(--color-bg))', border: '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)',
-        borderRadius: 6, padding: 12, marginBottom: 12, textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 11, color: 'var(--color-success)', fontWeight: 600, marginBottom: 4 }}>
-          {'\u2713'} Your agent is now reachable via iMessage / SMS
+    <div className="px-4 pb-4 pt-4 space-y-4" style={{ borderTop: '1px solid var(--color-border)' }}>
+      <StepLine steps={SENDBLUE_STEPS} current={2} label="SendBlue setup" />
+
+      <div className="flex items-center gap-3 py-3" style={{ borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+        <Station line="tools" state="current" />
+        <div className="min-w-0">
+          <div className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+            Your agent is now reachable via iMessage / SMS
+          </div>
+          <div className="tn-mono text-[20px] leading-7 font-semibold" style={{ color: 'var(--color-text)' }}>{selectedNumber}</div>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-success)' }}>{selectedNumber}</div>
       </div>
 
       {/* Webhook / ngrok step */}
-      <div style={{ marginTop: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{ background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>4</span>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>Set up webhook to receive texts</span>
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <LineBullet letter="4" size={20} />
+          <span className="text-[14px] font-semibold">Set up webhook to receive texts</span>
         </div>
-        <div style={{
-          fontSize: 11, lineHeight: 1.6,
-          color: 'var(--color-text-secondary)',
-          padding: '8px 10px', marginBottom: 10,
-          background: 'var(--color-bg-secondary)',
-          borderRadius: 6,
-          borderLeft: '3px solid var(--color-accent, var(--color-accent-purple))',
-        }}>
-          <div><strong>1.</strong> Open a terminal and run: <code style={{ color: 'var(--color-accent)', background: 'var(--color-bg)', padding: '1px 4px', borderRadius: 3 }}>ngrok http 8000</code></div>
-          <div style={{ marginTop: 4 }}><strong>2.</strong> Copy the <code style={{ color: 'var(--color-accent)', background: 'var(--color-bg)', padding: '1px 4px', borderRadius: 3 }}>https://</code> forwarding URL</div>
-          <div style={{ marginTop: 4 }}><strong>3.</strong> Paste it below and click "Register Webhook"</div>
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <ol className="list-none text-[13px] leading-5 space-y-1.5 mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+          <li><strong style={{ color: 'var(--color-text)' }}>1.</strong> Open a terminal and run: <code className="tn-mono px-1" style={{ color: 'var(--color-text)', background: 'var(--color-code-bg)' }}>ngrok http 8000</code></li>
+          <li><strong style={{ color: 'var(--color-text)' }}>2.</strong> Copy the <code className="tn-mono px-1" style={{ color: 'var(--color-text)', background: 'var(--color-code-bg)' }}>https://</code> forwarding URL</li>
+          <li><strong style={{ color: 'var(--color-text)' }}>3.</strong> Paste it below and click "Register Webhook"</li>
+        </ol>
+        <div className="flex gap-2">
           <input
             value={webhookUrl}
             onChange={(e) => { setWebhookUrl(e.target.value); setWebhookStatus('idle'); }}
             placeholder="https://abc123.ngrok-free.app"
-            style={{
-              flex: 1, padding: '7px 10px', background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border)', borderRadius: 4,
-              color: 'var(--color-text)', fontSize: 12, boxSizing: 'border-box' as const,
-            }}
+            aria-label="Webhook URL"
+            className="tn-input tn-mono flex-1 min-w-0"
           />
           <button
             onClick={registerWebhook}
             disabled={!webhookUrl.trim() || webhookStatus === 'registering'}
-            style={{
-              fontSize: 11, padding: '7px 14px', whiteSpace: 'nowrap' as const,
-              background: webhookStatus === 'done' ? 'var(--color-success)' : 'var(--color-accent-purple)',
-              color: 'var(--color-on-accent)', border: 'none', borderRadius: 5,
-              cursor: 'pointer', fontWeight: 600,
-              opacity: !webhookUrl.trim() || webhookStatus === 'registering' ? 0.5 : 1,
-            }}
+            className="tn-btn tn-btn-primary shrink-0"
           >
             {webhookStatus === 'registering' ? 'Registering...'
               : webhookStatus === 'done' ? 'Registered!'
@@ -2473,17 +2275,18 @@ function SendBlueWebhookStep({
           </button>
         </div>
         {webhookStatus === 'done' && (
-          <div style={{ fontSize: 11, color: 'var(--color-success)', marginTop: 6 }}>
+          <div className="flex items-center gap-2 text-[12px] mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+            <Station line="tools" state="current" size={10} />
             Webhook registered! Incoming texts will be forwarded to your agent.
           </div>
         )}
         {webhookStatus === 'error' && (
-          <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 6 }}>
+          <div role="alert" className="text-[12px] mt-2" style={{ color: 'var(--fail)' }}>
             Failed to register. Check your ngrok URL and try again.
           </div>
         )}
-        <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginTop: 8 }}>
-          Don't have ngrok? <a href="https://ngrok.com/download" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)', textDecoration: 'underline' }}>Download it free</a>
+        <div className="text-[12px] mt-3" style={{ color: 'var(--color-text-tertiary)' }}>
+          Don't have ngrok? <a href="https://ngrok.com/download" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2" style={{ color: 'var(--action)' }}>Download it free</a>
         </div>
       </div>
     </div>
@@ -2538,29 +2341,6 @@ function SendBlueWizard({
       setHealthy(true);
       onDone();
     } catch { /* */ } finally { setReconnecting(false); }
-  };
-
-  const cardStyle: React.CSSProperties = {
-    background: 'var(--color-bg-secondary)',
-    border: isActive ? '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)' : '1px dashed var(--color-border)',
-    borderRadius: 8, marginBottom: 10, overflow: 'hidden',
-  };
-
-  const btnPrimary: React.CSSProperties = {
-    fontSize: 12, padding: '7px 18px', background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-    border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600,
-  };
-
-  const btnSecondary: React.CSSProperties = {
-    fontSize: 11, padding: '5px 14px', background: 'transparent',
-    color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)',
-    borderRadius: 4, cursor: 'pointer',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '7px 10px', background: 'var(--color-bg-secondary)',
-    border: '1px solid var(--color-border)', borderRadius: 4,
-    color: 'var(--color-text)', fontSize: 12, boxSizing: 'border-box',
   };
 
   const handleVerify = async () => {
@@ -2633,31 +2413,27 @@ function SendBlueWizard({
   // Active state
   if (isActive && !expanded) {
     return (
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px' }}>
-          <span style={{ fontSize: 18, marginRight: 10 }}>{'\uD83D\uDCAC'}</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>iMessage / SMS</div>
-            <div style={{ fontSize: 11, color: healthy ? 'var(--color-success)' : 'var(--color-warning)' }}>
+      <div className="tn-panel mb-3" style={SURFACE_STATIONS}>
+        <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+          <Station line="tools" state={healthy ? 'current' : 'failed'} />
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-[14px]">iMessage / SMS</div>
+            <div className="tn-mono text-[12px]" style={{ color: healthy ? 'var(--color-text-secondary)' : 'var(--fail)' }}>
               {healthy ? `Active on ${activeNumber}` : `Disconnected — ${activeNumber}`}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="flex items-center gap-2">
             {!healthy && (
               <button
                 onClick={handleReconnect}
                 disabled={reconnecting}
-                style={{ ...btnPrimary, fontSize: 10, padding: '3px 10px' }}
+                className="tn-btn tn-btn-sm tn-btn-primary"
               >
                 {reconnecting ? '...' : 'Reconnect'}
               </button>
             )}
-            <span style={{
-              background: healthy ? 'color-mix(in srgb, var(--color-success) 22%, transparent)' : 'color-mix(in srgb, var(--color-warning) 18%, var(--color-bg))',
-              color: healthy ? 'var(--color-success)' : 'var(--color-warning)',
-              padding: '2px 8px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-            }}>{healthy ? 'Active' : 'Disconnected'}</span>
-            <button onClick={() => setExpanded(true)} style={btnSecondary}>
+            <StatusText tone={healthy ? 'default' : 'fail'}>{healthy ? 'Active' : 'Disconnected'}</StatusText>
+            <button onClick={() => setExpanded(true)} className="tn-btn tn-btn-sm">
               Details
             </button>
           </div>
@@ -2669,116 +2445,119 @@ function SendBlueWizard({
   // Active + expanded (show how to use + test)
   if (isActive && expanded) {
     return (
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 14px' }}>
-          <span style={{ fontSize: 18, marginRight: 10 }}>{'\uD83D\uDCAC'}</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>iMessage / SMS</div>
-            <div style={{ fontSize: 11, color: 'var(--color-success)' }}>Active on {activeNumber}</div>
+      <div className="tn-panel mb-3" style={SURFACE_STATIONS}>
+        <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+          <Station line="tools" state="current" />
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-[14px]">iMessage / SMS</div>
+            <div className="tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>Active on {activeNumber}</div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setExpanded(false)} style={btnSecondary}>Collapse</button>
-            <button onClick={() => onRemove(binding!.id)} style={{ ...btnSecondary, color: 'var(--color-error)' }}>Remove</button>
+          <div className="flex gap-2">
+            <button onClick={() => setExpanded(false)} className="tn-btn tn-btn-sm">Collapse</button>
+            <button onClick={() => onRemove(binding!.id)} className="tn-btn tn-btn-sm tn-btn-danger">Remove</button>
           </div>
         </div>
-        <div style={{ borderTop: '1px solid var(--color-border)', padding: 14, background: 'var(--color-bg)' }}>
-          <div style={{ fontSize: 12, marginBottom: 10, lineHeight: 1.6 }}>
-            {'\u2192'} Text <strong>{activeNumber}</strong> from any phone to talk to your agent.
+        <div className="px-4 py-4" style={{ borderTop: '1px solid var(--color-border)' }}>
+          <p className="text-[13px] mb-4 leading-5 max-w-[72ch]">
+            Text <strong className="tn-mono">{activeNumber}</strong> from any phone to talk to your agent.
             Responses arrive as iMessage (blue bubbles) when possible, SMS otherwise.
-          </div>
+          </p>
 
-          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 8, fontWeight: 600 }}>
-            Send a test message
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <FieldLabel>Send a test message</FieldLabel>
+          <div className="flex gap-2 max-w-md">
             <input
               value={testNumber}
               onChange={(e) => { setTestNumber(e.target.value); setTestSent(false); }}
               placeholder="Your phone number (+1...)"
-              style={{ ...inputStyle, flex: 1 }}
+              aria-label="Your phone number"
+              className="tn-input tn-mono flex-1 min-w-0"
             />
             <button
               onClick={handleTest}
               disabled={!testNumber.trim() || testSent}
-              style={{ ...btnPrimary, opacity: !testNumber.trim() ? 0.5 : 1 }}
+              className="tn-btn tn-btn-primary shrink-0"
             >
               {testSent ? 'Sent!' : 'Send Test'}
             </button>
           </div>
-          {error && <div style={{ color: 'var(--color-error)', fontSize: 11, marginTop: 6 }}>{error}</div>}
+          {error && <div role="alert" className="text-[12px] mt-2" style={{ color: 'var(--fail)' }}>{error}</div>}
         </div>
       </div>
     );
   }
 
+  const stepIndex = step === 'verified' || step === 'connecting' ? 1 : 0;
+
   // Not active — setup wizard
   return (
-    <div style={cardStyle}>
+    <div className="tn-panel mb-3" style={SURFACE_STATIONS}>
       {/* Header */}
       <div
-        style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', cursor: 'pointer' }}
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer"
         onClick={() => setStep(step === 'idle' ? 'creds' : 'idle')}
       >
-        <span style={{ fontSize: 18, marginRight: 10 }}>{'\uD83D\uDCAC'}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>iMessage / SMS</div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+        <Station line="tools" state={step === 'idle' ? 'open' : 'current'} />
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-[14px]">iMessage / SMS</div>
+          <div className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
             Your agent gets its own phone number — text it via iMessage or SMS
           </div>
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); setStep(step === 'idle' ? 'creds' : 'idle'); }}
-          style={{ fontSize: 10, padding: '3px 12px', background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+          className={`tn-btn tn-btn-sm shrink-0 ${step === 'idle' ? 'tn-btn-primary' : ''}`}
         >
           {step === 'idle' ? 'Set Up' : 'Cancel'}
         </button>
       </div>
 
+      {step !== 'idle' && step !== 'done' && (
+        <div className="px-4 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
+          <StepLine steps={SENDBLUE_STEPS} current={stepIndex} label="SendBlue setup" />
+        </div>
+      )}
+
       {/* Step 1: Sign up + enter credentials */}
       {(step === 'creds' || step === 'verifying') && (
-        <div style={{ borderTop: '1px solid var(--color-border)', padding: 14, background: 'var(--color-bg)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>1</span>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>Create a SendBlue account</span>
+        <div className="px-4 pb-4 pt-5 max-w-lg">
+          <div className="flex items-center gap-2 mb-3">
+            <LineBullet letter="1" size={20} />
+            <span className="text-[14px] font-semibold">Create a SendBlue account</span>
           </div>
           <button
             onClick={() => window.open('https://dashboard.sendblue.com/company-signup', '_blank')}
-            style={{ ...btnPrimary, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}
+            className="tn-btn tn-btn-sm mb-5"
           >
-            Open SendBlue signup {'\u2192'}
+            Open SendBlue signup <ArrowUpRight size={13} />
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>2</span>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>Paste your API credentials</span>
+          <div className="flex items-center gap-2 mb-2">
+            <LineBullet letter="2" size={20} />
+            <span className="text-[14px] font-semibold">Paste your API credentials</span>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+          <p className="text-[13px] mb-3 leading-5" style={{ color: 'var(--color-text-secondary)' }}>
             Go to your{' '}
-            <a href="https://dashboard.sendblue.co/api-credentials" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)', textDecoration: 'underline' }}>
+            <a href="https://dashboard.sendblue.co/api-credentials" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2" style={{ color: 'var(--action)' }}>
               SendBlue API Credentials page
             </a>{' '}
             and copy the API Key and API Secret.
-          </div>
+          </p>
 
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 3, fontWeight: 500 }}>
-              API Key ID *
-            </label>
-            <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Your API key ID" style={inputStyle} />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 3, fontWeight: 500 }}>
-              API Secret Key *
-            </label>
-            <input value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} placeholder="Your API secret key" type="password" style={inputStyle} />
-          </div>
+          <label className="block mb-3">
+            <FieldLabel>API Key ID *</FieldLabel>
+            <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Your API key ID" className="tn-input tn-mono" />
+          </label>
+          <label className="block mb-4">
+            <FieldLabel>API Secret Key *</FieldLabel>
+            <input value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} placeholder="Your API secret key" type="password" className="tn-input tn-mono" />
+          </label>
 
-          {error && <div style={{ color: 'var(--color-error)', fontSize: 11, marginBottom: 8 }}>{error}</div>}
+          {error && <div role="alert" className="text-[12px] mb-3" style={{ color: 'var(--fail)' }}>{error}</div>}
 
           <button
             onClick={handleVerify}
             disabled={!apiKey.trim() || !apiSecret.trim() || step === 'verifying'}
-            style={{ ...btnPrimary, opacity: !apiKey.trim() || !apiSecret.trim() ? 0.5 : 1 }}
+            className="tn-btn tn-btn-primary"
           >
             {step === 'verifying' ? 'Verifying...' : 'Verify & Find Number'}
           </button>
@@ -2787,71 +2566,57 @@ function SendBlueWizard({
 
       {/* Step 2: Number found — confirm + connect */}
       {(step === 'verified' || step === 'connecting') && (
-        <div style={{ borderTop: '1px solid var(--color-border)', padding: 14, background: 'var(--color-bg)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ background: 'var(--color-success)', color: 'var(--color-on-accent)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{'\u2713'}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-success)' }}>Credentials verified</span>
+        <div className="px-4 pb-4 pt-5 max-w-lg">
+          <div className="flex items-center gap-2 mb-4 text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+            <Station line="tools" state="current" size={12} />
+            Credentials verified
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>3</span>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>Your agent's phone number</span>
+          <div className="flex items-center gap-2 mb-3">
+            <LineBullet letter="3" size={20} />
+            <span className="text-[14px] font-semibold">Your agent's phone number</span>
           </div>
 
           {numbers.length > 1 ? (
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 3, fontWeight: 500 }}>
-                Select a number for your agent
-              </label>
+            <label className="block mb-4">
+              <FieldLabel>Select a number for your agent</FieldLabel>
               <select
                 value={selectedNumber}
                 onChange={(e) => setSelectedNumber(e.target.value)}
-                style={{ ...inputStyle, padding: '8px 10px' }}
+                className="tn-select tn-mono"
               >
                 {numbers.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
-            </div>
+            </label>
           ) : numbers.length === 1 ? (
-            <div style={{
-              background: 'var(--color-bg-secondary)', border: '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)',
-              borderRadius: 6, padding: '10px 12px', marginBottom: 12,
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <span style={{ fontSize: 20 }}>{'\uD83D\uDCF1'}</span>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-success)' }}>{selectedNumber}</div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>This will be your agent's phone number</div>
-              </div>
+            <div className="mb-4 py-2" style={{ borderTop: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+              <div className="tn-mono text-[18px] leading-6 font-semibold">{selectedNumber}</div>
+              <div className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>This will be your agent's phone number</div>
             </div>
           ) : (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{
-                fontSize: 11, color: 'var(--color-text-secondary)',
-                marginBottom: 8, lineHeight: 1.5,
-                padding: '8px 10px', background: 'var(--color-bg-secondary)',
-                borderRadius: 6, borderLeft: '3px solid var(--color-accent-purple)',
-              }}>
-                Copy the phone number shown under <strong>"Send from"</strong> in your SendBlue dashboard
+            <div className="mb-4">
+              <p className="text-[13px] mb-3 leading-5" style={{ color: 'var(--color-text-secondary)' }}>
+                Copy the phone number shown under <strong style={{ color: 'var(--color-text)' }}>"Send from"</strong> in your SendBlue dashboard
                 and paste it below. On the free tier this is a shared number.
-              </div>
-              <label style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 3, fontWeight: 500 }}>
-                SendBlue phone number *
+              </p>
+              <label className="block">
+                <FieldLabel>SendBlue phone number *</FieldLabel>
+                <input
+                  value={selectedNumber}
+                  onChange={(e) => setSelectedNumber(e.target.value)}
+                  placeholder="+16452468235"
+                  className="tn-input tn-mono"
+                />
               </label>
-              <input
-                value={selectedNumber}
-                onChange={(e) => setSelectedNumber(e.target.value)}
-                placeholder="+16452468235"
-                style={inputStyle}
-              />
             </div>
           )}
 
-          {error && <div style={{ color: 'var(--color-error)', fontSize: 11, marginBottom: 8 }}>{error}</div>}
+          {error && <div role="alert" className="text-[12px] mb-3" style={{ color: 'var(--fail)' }}>{error}</div>}
 
           <button
             onClick={handleConnect}
             disabled={step === 'connecting' || !selectedNumber.trim()}
-            style={{ ...btnPrimary, opacity: !selectedNumber.trim() ? 0.5 : 1 }}
+            className="tn-btn tn-btn-primary"
           >
             {step === 'connecting' ? 'Connecting...' : 'Activate Phone Number'}
           </button>
@@ -2914,22 +2679,11 @@ function MessagingTab({ agentId }: { agentId: string }) {
     } catch { /* */ }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '6px 10px',
-    background: 'var(--color-bg-secondary)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 4, color: 'var(--color-text)',
-    fontSize: 12, boxSizing: 'border-box',
-  };
-
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{
-        color: 'var(--color-text-secondary)',
-        fontSize: 12, marginBottom: 14,
-      }}>
+    <div className="py-2 max-w-3xl">
+      <p className="text-[14px] mb-4" style={{ color: 'var(--color-text-secondary)' }}>
         Connect a messaging channel so you can talk to your agent from your phone or other devices.
-      </div>
+      </p>
 
       {/* SendBlue wizard — primary option */}
       <SendBlueWizard
@@ -2939,14 +2693,7 @@ function MessagingTab({ agentId }: { agentId: string }) {
         onRemove={(id) => { unbindAgentChannel(agentId, id).then(loadBindings).catch(() => {}); }}
       />
 
-      {/* Divider */}
-      <div style={{
-        fontSize: 10, color: 'var(--color-text-secondary)',
-        textTransform: 'uppercase', letterSpacing: 1,
-        margin: '14px 0 8px', fontWeight: 600,
-      }}>
-        Other messaging channels
-      </div>
+      <SectionHeading as="h3" className="mt-8 mb-3">Other messaging channels</SectionHeading>
 
       {MESSAGING_CHANNELS.map((ch) => {
         const binding = bindings.find((b) => b.channel_type === ch.type);
@@ -2959,49 +2706,20 @@ function MessagingTab({ agentId }: { agentId: string }) {
         );
 
         return (
-          <div
-            key={ch.type}
-            style={{
-              background: 'var(--color-bg-secondary)',
-              border: binding
-                ? '1px solid color-mix(in srgb, var(--color-success) 22%, transparent)'
-                : '1px dashed var(--color-border)',
-              borderRadius: 8, marginBottom: 10,
-              overflow: 'hidden',
-            }}
-          >
+          <div key={ch.type} className="tn-panel mb-3" style={SURFACE_STATIONS}>
             {/* Header row */}
-            <div style={{
-              display: 'flex', alignItems: 'center',
-              padding: '12px 14px',
-            }}>
-              <span style={{ fontSize: 18, marginRight: 10 }}>{ch.icon}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{ch.name}</div>
-                <div style={{
-                  fontSize: 11,
-                  color: binding ? 'var(--color-success)' : 'var(--color-text-secondary)',
-                }}>
+            <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+              <Station line="tools" state={binding ? 'current' : isSetup ? 'current' : 'open'} />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-[14px]">{ch.name}</div>
+                <div className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
                   {binding ? ch.activeLabel(cfg) : ch.description}
                 </div>
               </div>
               {binding ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{
-                    background: 'color-mix(in srgb, var(--color-success) 22%, transparent)', color: 'var(--color-success)',
-                    padding: '2px 8px', borderRadius: 10,
-                    fontSize: 10, fontWeight: 600,
-                  }}>Active</span>
-                  <button
-                    onClick={() => handleRemove(binding.id)}
-                    style={{
-                      fontSize: 10, padding: '2px 8px',
-                      background: 'transparent',
-                      color: 'var(--color-text-secondary)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 4, cursor: 'pointer',
-                    }}
-                  >Remove</button>
+                <div className="flex items-center gap-2">
+                  <StatusText>Active</StatusText>
+                  <button onClick={() => handleRemove(binding.id)} className="tn-btn tn-btn-sm tn-btn-danger">Remove</button>
                 </div>
               ) : (
                 <button
@@ -3009,12 +2727,7 @@ function MessagingTab({ agentId }: { agentId: string }) {
                     setSetupType(isSetup ? null : ch.type);
                     setFormValues({});
                   }}
-                  style={{
-                    fontSize: 10, padding: '3px 12px',
-                    background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-                    border: 'none', borderRadius: 5,
-                    cursor: 'pointer', fontWeight: 600,
-                  }}
+                  className={`tn-btn tn-btn-sm ${isSetup ? '' : 'tn-btn-primary'}`}
                 >
                   {isSetup ? 'Cancel' : 'Set Up'}
                 </button>
@@ -3023,110 +2736,61 @@ function MessagingTab({ agentId }: { agentId: string }) {
 
             {/* Active state: how to use */}
             {binding && (
-              <div style={{
-                borderTop: '1px solid var(--color-border)',
-                padding: '10px 14px',
-                background: 'var(--color-bg)',
-              }}>
-                <div style={{
-                  fontSize: 11, color: 'var(--color-text-secondary)',
-                  display: 'flex', alignItems: 'flex-start', gap: 6,
-                }}>
-                  <span style={{ flexShrink: 0 }}>{'\u2192'}</span>
-                  <span>{ch.howToUse(cfg)}</span>
-                </div>
+              <div className="px-4 py-3 text-[13px]" style={{ borderTop: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                {ch.howToUse(cfg)}
               </div>
             )}
 
             {/* Setup form */}
             {isSetup && (
-              <div style={{
-                borderTop: '1px solid var(--color-border)',
-                padding: '14px',
-                background: 'var(--color-bg)',
-              }}>
+              <div className="px-4 py-4" style={{ borderTop: '1px solid var(--color-border)' }}>
                 {/* Setup instructions */}
-                <div style={{
-                  fontSize: 11, lineHeight: 1.5,
-                  color: 'var(--color-text-secondary)',
-                  marginBottom: 12,
-                  padding: '8px 10px',
-                  background: 'var(--color-bg-secondary)',
-                  borderRadius: 6,
-                  borderLeft: '3px solid var(--color-accent, var(--color-accent-purple))',
-                }}>
+                <div className="text-[13px] leading-5 mb-4 max-w-[72ch] space-y-1.5" style={{ color: 'var(--color-text-secondary)' }}>
                   {ch.setupSteps.map((step, i) => {
                     if (step.startsWith('COPYABLE:')) {
                       const text = step.slice(9);
                       return (
-                        <div key={i} style={{ marginBottom: 6, marginTop: 4 }}>
-                          <div style={{
-                            position: 'relative',
-                            background: 'var(--color-bg)',
-                            border: '1px solid var(--color-border)',
-                            borderRadius: 4, padding: '8px 10px',
-                            fontSize: 10, fontFamily: 'monospace',
-                            wordBreak: 'break-all', lineHeight: 1.4,
-                            maxHeight: 80, overflowY: 'auto',
-                          }}>
-                            {text}
+                        <div key={i} className="relative my-2" style={{ background: 'var(--color-code-bg)', border: '1px solid var(--color-border)', borderRadius: 2 }}>
+                          <div className="flex justify-end px-2 pt-2">
                             <button
                               onClick={() => { navigator.clipboard.writeText(text); }}
-                              style={{
-                                position: 'sticky', float: 'right', top: 0,
-                                fontSize: 10, padding: '2px 8px',
-                                background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-                                border: 'none', borderRadius: 3,
-                                cursor: 'pointer', fontWeight: 600,
-                              }}
+                              className="tn-btn tn-btn-sm"
                             >Copy</button>
+                          </div>
+                          <div className="tn-mono text-[11px] leading-4 px-3 pb-3 pt-1 break-all overflow-y-auto" style={{ maxHeight: 96, color: 'var(--color-text)' }}>
+                            {text}
                           </div>
                         </div>
                       );
                     }
-                    return (
-                      <div key={i} style={{ marginBottom: i < ch.setupSteps.length - 1 ? 4 : 0 }}>
-                        {step}
-                      </div>
-                    );
+                    return <div key={i}>{step}</div>;
                   })}
                 </div>
 
                 {/* Form fields */}
-                {ch.fields.map((field) => (
-                  <div key={field.key} style={{ marginBottom: 8 }}>
-                    <label style={{
-                      display: 'block', fontSize: 11,
-                      color: 'var(--color-text-secondary)',
-                      marginBottom: 3, fontWeight: 500,
-                    }}>
-                      {field.label}{field.required ? ' *' : ''}
+                <div className="max-w-md">
+                  {ch.fields.map((field) => (
+                    <label key={field.key} className="block mb-3">
+                      <FieldLabel>{field.label}{field.required ? ' *' : ''}</FieldLabel>
+                      <input
+                        type={field.type || 'text'}
+                        value={formValues[field.key] || ''}
+                        onChange={(e) => setField(field.key, e.target.value)}
+                        placeholder={field.placeholder}
+                        className="tn-input tn-mono"
+                      />
                     </label>
-                    <input
-                      type={field.type || 'text'}
-                      value={formValues[field.key] || ''}
-                      onChange={(e) => setField(field.key, e.target.value)}
-                      placeholder={field.placeholder}
-                      style={inputStyle}
-                    />
-                  </div>
-                ))}
+                  ))}
 
-                {/* Connect button */}
-                <button
-                  onClick={() => handleSetup(ch)}
-                  disabled={loading || !canConnect}
-                  style={{
-                    fontSize: 12, padding: '7px 20px',
-                    background: 'var(--color-accent-purple)', color: 'var(--color-on-accent)',
-                    border: 'none', borderRadius: 5,
-                    cursor: 'pointer', fontWeight: 600,
-                    opacity: loading || !canConnect ? 0.5 : 1,
-                    marginTop: 4,
-                  }}
-                >
-                  {loading ? 'Connecting...' : 'Connect'}
-                </button>
+                  {/* Connect button */}
+                  <button
+                    onClick={() => handleSetup(ch)}
+                    disabled={loading || !canConnect}
+                    className="tn-btn tn-btn-primary mt-1"
+                  >
+                    {loading ? 'Connecting...' : 'Connect'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -3162,63 +2826,42 @@ function LearningTab({ agentId, learningEnabled }: { agentId: string; learningEn
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Learning</span>
-          <span
-            className="text-xs px-2 py-0.5 rounded-full"
-            style={{
-              background: learningEnabled ? 'var(--color-success)20' : 'var(--color-bg-secondary)',
-              color: learningEnabled ? 'var(--color-success)' : 'var(--color-text-tertiary)',
-            }}
-          >
-            {learningEnabled ? 'Enabled' : 'Disabled'}
-          </span>
-        </div>
-        <button
-          onClick={handleTrigger}
-          disabled={triggering}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs cursor-pointer font-medium"
-          style={{
-            background: 'var(--color-accent)',
-            color: 'var(--color-on-accent)',
-            opacity: triggering ? 0.6 : 1,
-          }}
-        >
-          <RefreshCw size={12} className={triggering ? 'animate-spin' : ''} />
-          Run Learning
-        </button>
-      </div>
+    <div className="space-y-4 max-w-3xl">
+      <SectionHeading
+        actions={
+          <>
+            <StatusText>{learningEnabled ? 'Enabled' : 'Disabled'}</StatusText>
+            <button onClick={handleTrigger} disabled={triggering} className="tn-btn tn-btn-sm">
+              <RefreshCw size={13} />
+              Run Learning
+            </button>
+          </>
+        }
+      >
+        Learning
+      </SectionHeading>
       {logs.length === 0 ? (
-        <div className="text-sm text-center py-8" style={{ color: 'var(--color-text-tertiary)' }}>
+        <div className="text-[14px] text-center py-10" style={{ color: 'var(--color-text-tertiary)' }}>
           No learning events yet. Run the agent or trigger learning manually.
         </div>
       ) : (
-        <div className="space-y-2">
-          {logs.map((entry) => (
-            <div
-              key={entry.id}
-              className="rounded-lg p-3 text-sm"
-              style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span
-                  className="text-xs px-2 py-0.5 rounded"
-                  style={{ background: 'var(--color-accent)' + '20', color: 'var(--color-accent)' }}
-                >
-                  {entry.event_type}
-                </span>
-                <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {formatRelativeTime(entry.created_at)}
-                </span>
+        <ul className="list-none" aria-label="Learning events">
+          {logs.map((entry, i) => (
+            <RailItem key={entry.id} line="data" state="open" first={i === 0} last={i === logs.length - 1} stationTop={13}>
+              <div className="py-2.5 text-[14px]">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="tn-mono text-[13px] font-medium">{entry.event_type}</span>
+                  <span className="tn-mono text-[12px] shrink-0" style={{ color: 'var(--color-text-tertiary)' }}>
+                    {formatRelativeTime(entry.created_at)}
+                  </span>
+                </div>
+                {entry.description && (
+                  <p className="mt-0.5 max-w-[72ch]" style={{ color: 'var(--color-text-secondary)' }}>{entry.description}</p>
+                )}
               </div>
-              {entry.description && (
-                <p style={{ color: 'var(--color-text-secondary)' }}>{entry.description}</p>
-              )}
-            </div>
+            </RailItem>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -3228,7 +2871,7 @@ function LearningTab({ agentId, learningEnabled }: { agentId: string; learningEn
 // Logs tab component
 // ---------------------------------------------------------------------------
 
-function LogsTab({ agentId }: { agentId: string }) {
+function LogsTab({ agentId, line }: { agentId: string; line: Line }) {
   const [traces, setTraces] = useState<AgentTrace[]>([]);
   const [learningEntries, setLearningEntries] = useState<LearningLogEntry[]>([]);
   const [expandedTrace, setExpandedTrace] = useState<string | null>(null);
@@ -3272,15 +2915,6 @@ function LogsTab({ agentId }: { agentId: string }) {
     ...learningEntries.map((e): TimelineEntry => ({ kind: 'learning', data: e, ts: e.created_at })),
   ].sort((a, b) => b.ts - a.ts);
 
-  const learningEventColor = (eventType: string) => {
-    if (eventType === 'query_start') return 'var(--color-accent)';
-    if (eventType === 'query_complete') return 'var(--color-success)';
-    if (eventType === 'tool_call') return 'var(--color-warning)';
-    if (eventType === 'tool_result') return 'var(--color-accent-purple)';
-    if (eventType === 'query_error') return 'var(--color-error)';
-    return 'var(--color-text-secondary)';
-  };
-
   const learningEventLabel = (eventType: string) => {
     if (eventType === 'query_start') return 'Query';
     if (eventType === 'query_complete') return 'Complete';
@@ -3290,55 +2924,56 @@ function LogsTab({ agentId }: { agentId: string }) {
     return eventType;
   };
 
+  /** Tool events ride the tools line, other learning events the data line. */
+  const learningEventLine = (eventType: string): Line =>
+    eventType === 'tool_call' || eventType === 'tool_result' ? 'tools' : 'data';
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-          Activity Log
-        </span>
-        <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-          {timeline.length} entr{timeline.length !== 1 ? 'ies' : 'y'} (auto-refreshing)
-        </span>
-      </div>
+    <div className="space-y-4 max-w-3xl">
+      <SectionHeading
+        actions={
+          <span className="tn-mono text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            {timeline.length} entr{timeline.length !== 1 ? 'ies' : 'y'} (auto-refreshing)
+          </span>
+        }
+      >
+        Activity Log
+      </SectionHeading>
       {timeline.length === 0 ? (
-        <div className="text-sm text-center py-8" style={{ color: 'var(--color-text-tertiary)' }}>
+        <div className="text-[14px] text-center py-10" style={{ color: 'var(--color-text-tertiary)' }}>
           No activity yet. Send a message or run the agent to generate logs.
         </div>
       ) : (
-        <div className="space-y-2">
-          {timeline.map((entry) => {
+        <ul className="list-none" aria-label="Activity log">
+          {timeline.map((entry, idx) => {
+            const first = idx === 0;
+            const last = idx === timeline.length - 1;
             if (entry.kind === 'learning') {
               const e = entry.data;
+              const failed = e.event_type === 'query_error';
               return (
-                <div
+                <RailItem
                   key={`learn-${e.id}`}
-                  className="rounded-lg p-3 text-sm"
-                  style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
+                  line={learningEventLine(e.event_type)}
+                  state={failed ? 'failed' : 'open'}
+                  first={first}
+                  last={last}
+                  stationTop={13}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-2 h-2 rounded-full inline-block"
-                        style={{ background: learningEventColor(e.event_type) }}
-                      />
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                        style={{
-                          background: `${learningEventColor(e.event_type)}20`,
-                          color: learningEventColor(e.event_type),
-                        }}
-                      >
+                  <div className="py-2.5 text-[14px]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <StatusText tone={failed ? 'fail' : 'default'} className="text-[13px]! font-medium">
                         {learningEventLabel(e.event_type)}
+                      </StatusText>
+                      <span className="tn-mono text-[12px] shrink-0" style={{ color: 'var(--color-text-tertiary)' }}>
+                        {formatRelativeTime(e.created_at)}
                       </span>
                     </div>
-                    <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                      {formatRelativeTime(e.created_at)}
-                    </span>
+                    <div className="mt-0.5 text-[13px] max-w-[72ch]" style={{ color: 'var(--color-text-secondary)' }}>
+                      {e.description}
+                    </div>
                   </div>
-                  <div className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                    {e.description}
-                  </div>
-                </div>
+                </RailItem>
               );
             }
 
@@ -3349,65 +2984,61 @@ function LogsTab({ agentId }: { agentId: string }) {
               | undefined;
             const isError = t.outcome !== 'success';
             const isExpanded = expandedTrace === t.id;
+            const canExpand = isError && !!errorDetail;
 
             return (
-              <div
+              <RailItem
                 key={`trace-${t.id}`}
-                className="rounded-lg p-3 text-sm cursor-pointer"
-                style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-                onClick={() => isError && errorDetail && setExpandedTrace(isExpanded ? null : t.id)}
+                line={line}
+                state={isError ? 'failed' : 'current'}
+                first={first}
+                last={last}
+                stationTop={13}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-2 h-2 rounded-full inline-block"
-                      style={{ background: t.outcome === 'success' ? 'var(--color-success)' : 'var(--color-error)' }}
-                    />
-                    <span style={{ color: 'var(--color-text)' }}>{t.outcome}</span>
-                    <span
-                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                      style={{ background: 'var(--color-bg)', color: 'var(--color-text-secondary)' }}
-                    >
-                      Trace
+                <div
+                  className={`py-2.5 text-[14px] ${canExpand ? 'cursor-pointer' : ''}`}
+                  onClick={() => canExpand && setExpandedTrace(isExpanded ? null : t.id)}
+                  role={canExpand ? 'button' : undefined}
+                  tabIndex={canExpand ? 0 : undefined}
+                  aria-expanded={canExpand ? isExpanded : undefined}
+                  onKeyDown={(ev) => {
+                    if (canExpand && (ev.key === 'Enter' || ev.key === ' ')) {
+                      ev.preventDefault();
+                      setExpandedTrace(isExpanded ? null : t.id);
+                    }
+                  }}
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="flex items-baseline gap-3 min-w-0 flex-wrap">
+                      <span className="font-semibold" style={{ color: isError ? 'var(--fail)' : 'var(--color-text)' }}>{t.outcome}</span>
+                      <span className="text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>Trace</span>
+                      {errorDetail && (
+                        <StatusText tone={errorDetail.error_type === 'fatal' ? 'fail' : 'default'}>
+                          {errorDetail.error_type}
+                        </StatusText>
+                      )}
                     </span>
-                    {errorDetail && (
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                        style={{
-                          background: errorDetail.error_type === 'fatal' ? 'var(--color-error)20' :
-                            errorDetail.error_type === 'escalate' ? 'var(--color-warning)20' : 'var(--color-accent)20',
-                          color: errorDetail.error_type === 'fatal' ? 'var(--color-error)' :
-                            errorDetail.error_type === 'escalate' ? 'var(--color-warning)' : 'var(--color-accent)',
-                        }}
-                      >
-                        {errorDetail.error_type}
-                      </span>
-                    )}
+                    <span className="tn-mono text-[12px] shrink-0" style={{ color: 'var(--color-text-tertiary)' }}>
+                      {formatRelativeTime(t.started_at)}
+                    </span>
                   </div>
-                  <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                    {formatRelativeTime(t.started_at)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  <span>{t.duration.toFixed(1)}s</span>
-                  <span>{t.steps} step{t.steps !== 1 ? 's' : ''}</span>
-                </div>
-                {isExpanded && errorDetail && (
-                  <div className="mt-2 pt-2 space-y-1.5 text-xs" style={{ borderTop: '1px solid var(--color-border)' }}>
-                    <div>
-                      <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>Error: </span>
-                      <span style={{ color: 'var(--color-text)' }}>{errorDetail.error_message}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>Action: </span>
-                      <span style={{ color: 'var(--color-text)' }}>{errorDetail.suggested_action}</span>
-                    </div>
+                  <div className="flex items-center gap-4 mt-0.5 tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+                    <span>{t.duration.toFixed(1)}s</span>
+                    <span>{t.steps} step{t.steps !== 1 ? 's' : ''}</span>
                   </div>
-                )}
-              </div>
+                  {isExpanded && errorDetail && (
+                    <dl className="mt-2 pt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]" style={{ borderTop: '1px solid var(--color-border)' }}>
+                      <dt className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>Error: </dt>
+                      <dd style={{ color: 'var(--color-text)' }}>{errorDetail.error_message}</dd>
+                      <dt className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>Action: </dt>
+                      <dd style={{ color: 'var(--color-text)' }}>{errorDetail.suggested_action}</dd>
+                    </dl>
+                  )}
+                </div>
+              </RailItem>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -3547,8 +3178,13 @@ export function AgentsPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}>
-        Loading agents...
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
+        <div className="max-w-6xl mx-auto">
+          <PageHeader title="Agents" />
+          <p className="text-[14px] py-10" style={{ color: 'var(--color-text-tertiary)' }}>
+            Loading agents...
+          </p>
+        </div>
       </div>
     );
   }
@@ -3560,122 +3196,103 @@ export function AgentsPage() {
       tasks.length > 0
         ? Math.round((tasks.filter((t) => t.status === 'completed').length / tasks.length) * 100)
         : null;
+    void successRate;
+
+    const line = agentLine(selectedAgent);
+    const model = (selectedAgent.config?.model as string) || '';
 
     const DETAIL_TABS = [
-      { id: 'interact', label: 'Interact', icon: MessageSquare },
-      { id: 'overview', label: 'Overview', icon: Activity },
-      { id: 'channels', label: 'Data Sources', icon: Database },
-      { id: 'messaging', label: 'Messaging Channels', icon: Wifi },
-      { id: 'tasks', label: 'Tasks', icon: ListTodo },
-      { id: 'memory', label: 'Memory', icon: Brain },
-      { id: 'learning', label: 'Learning', icon: Settings },
-      { id: 'logs', label: 'Logs', icon: FileText },
+      { id: 'interact', label: 'Interact' },
+      { id: 'overview', label: 'Overview' },
+      { id: 'channels', label: 'Data Sources' },
+      { id: 'messaging', label: 'Messaging Channels' },
+      { id: 'tasks', label: 'Tasks' },
+      { id: 'memory', label: 'Memory' },
+      { id: 'learning', label: 'Learning' },
+      { id: 'logs', label: 'Logs' },
     ] as const;
 
     return (
-      <div className="flex-1 overflow-y-auto px-6 py-10">
+      <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
         <div className="max-w-5xl mx-auto">
         {/* Back button */}
         <button
           onClick={() => setSelectedAgentId(null)}
-          className="flex items-center gap-1 mb-4 text-sm cursor-pointer"
-          style={{ color: 'var(--color-text-secondary)' }}
+          className="tn-btn tn-btn-sm tn-btn-ghost -ml-2.5 mb-4"
         >
           <ChevronLeft size={16} /> Back to agents
         </button>
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Bot size={24} style={{ color: 'var(--color-accent)' }} />
-            <div>
-              <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
-                {selectedAgent.name}
-              </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <StatusBadge status={selectedAgent.status} />
-                <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {selectedAgent.agent_type}
+        <PageHeader
+          title={
+            <span className="flex items-center gap-3 min-w-0">
+              <LineBullet letter={bulletLetter(selectedAgent.name)} line={line} size={28} />
+              <span className="truncate">{selectedAgent.name}</span>
+            </span>
+          }
+          meta={
+            <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
+              <StatusBadge status={selectedAgent.status} line={line} />
+              <span>{selectedAgent.agent_type}</span>
+              {model && <span style={{ color: 'var(--color-text-tertiary)' }}>{model}</span>}
+            </span>
+          }
+          actions={
+            <>
+              {detailTab === 'interact' ? (
+                <span className="flex items-center gap-1.5 text-[13px] px-1" style={{ color: 'var(--color-text-secondary)' }}>
+                  <MessageSquare size={14} /> Chat ready — just type below
                 </span>
-              </div>
-            </div>
-          </div>
-          {/* Header actions */}
-          <div className="flex items-center gap-2">
-            {detailTab === 'interact' ? (
-              <span
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-                style={{ background: 'var(--color-success)20', color: 'var(--color-success)', border: '1px solid var(--color-success)40' }}
-              >
-                <MessageSquare size={13} /> Chat ready — just type below
-              </span>
-            ) : (
+              ) : (
+                <button onClick={() => handleRun(selectedAgent.id)} className="tn-btn tn-btn-primary">
+                  <Zap size={14} /> Run Now
+                </button>
+              )}
+              {(selectedAgent.status === 'running' || selectedAgent.status === 'idle') && (
+                <button onClick={() => handlePause(selectedAgent.id)} className="tn-btn">
+                  <Pause size={14} /> Pause
+                </button>
+              )}
+              {selectedAgent.status === 'paused' && (
+                <button onClick={() => handleResume(selectedAgent.id)} className="tn-btn">
+                  <Play size={14} /> Resume
+                </button>
+              )}
+              {(selectedAgent.status === 'error' || selectedAgent.status === 'stalled' || selectedAgent.status === 'needs_attention') && (
+                <button onClick={() => handleRecover(selectedAgent.id)} className="tn-btn">
+                  <AlertTriangle size={14} style={{ color: 'var(--fail)' }} /> Recover
+                </button>
+              )}
               <button
-                onClick={() => handleRun(selectedAgent.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm cursor-pointer font-medium"
-                style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
+                onClick={async () => {
+                  if (window.confirm(`Delete ${selectedAgent.name}? This cannot be undone.`)) {
+                    await deleteManagedAgent(selectedAgent.id);
+                    setSelectedAgentId(null);
+                    await refresh();
+                  }
+                }}
+                className="tn-btn tn-btn-danger"
+                style={{ width: 36, padding: 0 }}
+                title="Delete agent"
+                aria-label="Delete agent"
               >
-                <Zap size={13} /> Run Now
+                <Trash2 size={15} />
               </button>
-            )}
-            {(selectedAgent.status === 'running' || selectedAgent.status === 'idle') && (
-              <button
-                onClick={() => handlePause(selectedAgent.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm cursor-pointer"
-                style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-              >
-                <Pause size={13} /> Pause
-              </button>
-            )}
-            {selectedAgent.status === 'paused' && (
-              <button
-                onClick={() => handleResume(selectedAgent.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm cursor-pointer"
-                style={{ background: 'var(--color-success)20', color: 'var(--color-success)', border: '1px solid var(--color-success)40' }}
-              >
-                <Play size={13} /> Resume
-              </button>
-            )}
-            {(selectedAgent.status === 'error' || selectedAgent.status === 'stalled' || selectedAgent.status === 'needs_attention') && (
-              <button
-                onClick={() => handleRecover(selectedAgent.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm cursor-pointer"
-                style={{ background: 'var(--color-error)20', color: 'var(--color-error)', border: '1px solid var(--color-error)40' }}
-              >
-                <AlertTriangle size={13} /> Recover
-              </button>
-            )}
-            <button
-              onClick={async () => {
-                if (window.confirm(`Delete ${selectedAgent.name}? This cannot be undone.`)) {
-                  await deleteManagedAgent(selectedAgent.id);
-                  setSelectedAgentId(null);
-                  await refresh();
-                }
-              }}
-              className="p-1.5 rounded-lg cursor-pointer transition-colors"
-              style={{ color: 'var(--color-error)', background: 'var(--color-error)15' }}
-              title="Delete agent"
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-6 p-1 rounded-lg overflow-x-auto" style={{ background: 'var(--color-bg-secondary)' }}>
-          {DETAIL_TABS.map(({ id, label, icon: Icon }) => (
+        <div role="tablist" aria-label="Agent sections" className="tn-tabs mt-2 mb-6 overflow-x-auto">
+          {DETAIL_TABS.map(({ id, label }) => (
             <button
               key={id}
+              role="tab"
+              aria-selected={detailTab === id}
               onClick={() => setDetailTab(id)}
-              className="px-3 py-2 rounded-md text-xs flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors"
-              style={{
-                background: detailTab === id ? 'var(--color-bg)' : 'transparent',
-                color: detailTab === id ? 'var(--color-text)' : 'var(--color-text-secondary)',
-                fontWeight: detailTab === id ? 500 : 400,
-              }}
+              className="tn-tab whitespace-nowrap shrink-0"
             >
-              <Icon size={13} />
               {label}
             </button>
           ))}
@@ -3683,55 +3300,42 @@ export function AgentsPage() {
 
         {/* Tab: Overview */}
         {detailTab === 'overview' && (
-          <div className="space-y-3">
+          <div className="space-y-10">
             {/* Instruction */}
             <AgentInstructionSection agent={selectedAgent} onAgentUpdated={refresh} />
 
             {/* Configuration */}
-            <div
-              className="p-3 rounded-lg"
-              style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-            >
-              <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
-                Configuration
-              </h3>
+            <section>
+              <SectionHeading>Configuration</SectionHeading>
               <AgentConfigGrid agent={selectedAgent} onAgentUpdated={refresh} />
-              <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
-                <span className="text-xs font-mono" style={{ color: 'var(--color-text-tertiary)' }}>
-                  ID: {selectedAgent.id}
-                </span>
-              </div>
-            </div>
+              <p className="tn-mono text-[12px] mt-3" style={{ color: 'var(--color-text-tertiary)' }}>
+                ID: {selectedAgent.id}
+              </p>
+            </section>
 
             {/* Hint for deep research agents */}
             {selectedAgent.agent_type === 'deep_research' && (
-              <div
-                className="flex items-start gap-3 p-3 rounded-lg text-sm"
-                style={{
-                  background: 'var(--color-accent-subtle)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <Database size={16} style={{ color: 'var(--color-accent)', flexShrink: 0, marginTop: 2 }} />
+              <div className="tn-panel flex items-start gap-3 p-4 text-[14px] leading-5">
+                <Database size={16} className="shrink-0 mt-0.5" style={{ color: 'var(--color-text-secondary)' }} />
                 <div style={{ color: 'var(--color-text-secondary)' }}>
-                  <strong>Tip:</strong> Connect your personal data in the{' '}
+                  <strong style={{ color: 'var(--color-text)' }}>Tip:</strong> Connect your personal data in the{' '}
                   <button
                     onClick={() => setDetailTab('channels')}
-                    className="cursor-pointer underline"
-                    style={{ color: 'var(--color-accent)', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
+                    className="cursor-pointer underline underline-offset-2"
+                    style={{ color: 'var(--action)', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
                   >Data Sources</button>{' '}
                   tab, then set up{' '}
                   <button
                     onClick={() => setDetailTab('messaging')}
-                    className="cursor-pointer underline"
-                    style={{ color: 'var(--color-accent)', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
+                    className="cursor-pointer underline underline-offset-2"
+                    style={{ color: 'var(--action)', background: 'none', border: 'none', padding: 0, font: 'inherit' }}
                   >Messaging Channels</button>{' '}
                   to talk to this agent from your phone.
                 </div>
               </div>
             )}
 
-            {/* Usage stats + savings — single compact row */}
+            {/* Usage stats + savings */}
             {(() => {
               const inTok = selectedAgent.input_tokens ?? 0;
               const outTok = selectedAgent.output_tokens ?? 0;
@@ -3748,80 +3352,50 @@ export function AgentsPage() {
               const energyKj = energyWh * 3.6;
               const fmtFlops = flops >= 1e15 ? `${(flops / 1e15).toFixed(1)} PFLOPs` : `${(flops / 1e12).toFixed(1)} TFLOPs`;
               const hasSavings = inTok + outTok > 0;
-              const sectionTitle = { fontSize: 11, fontWeight: 600, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: 8 };
               return (
-                <div className="p-4 rounded-xl" style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}>
-                  <div className="flex gap-0 flex-wrap items-stretch">
-                    {/* Agent Statistics */}
-                    <div className="pr-5">
-                      <p style={sectionTitle}>Agent Statistics</p>
-                      <div className="flex gap-5">
-                        <div>
-                          <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-text)' }}>{selectedAgent.total_runs ?? 0}</p>
-                          <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Total Queries</p>
-                        </div>
-                        <div>
-                          <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-text)' }}>{inTok.toLocaleString()}</p>
-                          <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Input Tokens</p>
-                        </div>
-                        <div>
-                          <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-text)' }}>{outTok.toLocaleString()}</p>
-                          <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Output Tokens</p>
-                        </div>
-                      </div>
-                    </div>
-                    {hasSavings && (<>
-                      <div style={{ width: 1, background: 'var(--color-border)' }} />
-                      {/* Local Utilization */}
-                      <div className="px-5">
-                        <p style={sectionTitle}>Local Utilization</p>
-                        <div className="flex gap-5">
-                          <div>
-                            <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-success)' }}>{fmtFlops}</p>
-                            <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Compute</p>
-                          </div>
-                          <div>
-                            <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-success)' }}>{energyKj.toFixed(2)} kJ</p>
-                            <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>Energy</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ width: 1, background: 'var(--color-border)' }} />
-                      {/* Dollars Saved */}
-                      <div className="pl-5">
-                        <p style={sectionTitle}>Dollars Saved vs.</p>
-                        <div className="flex gap-5">
-                          {providers.map((p) => {
-                            const cost = (inTok / 1e6) * p.inPer1M + (outTok / 1e6) * p.outPer1M;
-                            return (
-                              <div key={p.label}>
-                                <p className="text-xl font-bold leading-none" style={{ color: 'var(--color-success)' }}>${cost.toFixed(4)}</p>
-                                <p className="text-xs mt-1" style={{ color: 'var(--color-text-tertiary)' }}>{p.label}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </>)}
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-[auto_auto_minmax(0,1fr)] gap-x-10 gap-y-8">
+                  <section>
+                    <SectionHeading as="h4">Agent Statistics</SectionHeading>
+                    <dl className="flex gap-6 flex-wrap mt-3">
+                      <Figure label="Total Queries" value={selectedAgent.total_runs ?? 0} />
+                      <Figure label="Input Tokens" value={inTok.toLocaleString()} />
+                      <Figure label="Output Tokens" value={outTok.toLocaleString()} />
+                    </dl>
+                  </section>
+                  {hasSavings && (<>
+                    <section>
+                      <SectionHeading as="h4">Local Utilization</SectionHeading>
+                      <dl className="flex gap-6 flex-wrap mt-3">
+                        <Figure label="Compute" value={fmtFlops} />
+                        <Figure label="Energy" value={`${energyKj.toFixed(2)} kJ`} />
+                      </dl>
+                    </section>
+                    <section>
+                      <SectionHeading as="h4">Dollars Saved vs.</SectionHeading>
+                      <dl className="flex gap-6 flex-wrap mt-3">
+                        {providers.map((p) => {
+                          const cost = (inTok / 1e6) * p.inPer1M + (outTok / 1e6) * p.outPer1M;
+                          return <Figure key={p.label} label={p.label} value={`$${cost.toFixed(4)}`} />;
+                        })}
+                      </dl>
+                    </section>
+                  </>)}
                 </div>);
             })()}
 
             {/* Channels summary */}
             {channels.length > 0 && (
-              <div
-                className="p-4 rounded-lg"
-                style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-              >
-                <h3 className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                  Messaging Channels
-                </h3>
-                {channels.map((b) => (
-                  <div key={b.id} className="text-sm py-1" style={{ color: 'var(--color-text)' }}>
-                    {b.channel_type}: {b.routing_mode}
-                  </div>
-                ))}
-              </div>
+              <section>
+                <SectionHeading>Messaging Channels</SectionHeading>
+                <ul className="list-none mt-2">
+                  {channels.map((b) => (
+                    <li key={b.id} className="flex items-center gap-2.5 py-2 tn-mono text-[13px]" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <Station line="tools" state="current" size={12} />
+                      {b.channel_type}: {b.routing_mode}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
           </div>
         )}
@@ -3841,31 +3415,28 @@ export function AgentsPage() {
 
         {/* Tab: Tasks */}
         {detailTab === 'tasks' && (
-          <div className="space-y-2">
-            {tasks.map((t) => (
-              <div
-                key={t.id}
-                className="p-3 rounded-lg"
-                style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <span className="text-sm" style={{ color: 'var(--color-text)' }}>
-                    {t.description}
-                  </span>
-                  <span
-                    className="text-xs px-2 py-0.5 rounded flex-shrink-0"
-                    style={{
-                      background: statusColor(t.status) + '20',
-                      color: statusColor(t.status),
-                    }}
-                  >
-                    {t.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+          <div className="max-w-3xl">
+            {tasks.length > 0 && (
+              <ul className="list-none" aria-label="Tasks">
+                {tasks.map((t, i) => {
+                  const state = statusStation(t.status);
+                  return (
+                    <RailItem key={t.id} line={line} state={state} first={i === 0} last={i === tasks.length - 1} stationTop={13}>
+                      <div className="flex justify-between items-baseline gap-4 py-2.5" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                        <span className="text-[14px] min-w-0" style={{ color: 'var(--color-text)' }}>
+                          {t.description}
+                        </span>
+                        <StatusText tone={state === 'failed' ? 'fail' : 'default'} className="shrink-0">
+                          {t.status}
+                        </StatusText>
+                      </div>
+                    </RailItem>
+                  );
+                })}
+              </ul>
+            )}
             {tasks.length === 0 && (
-              <div className="text-sm py-8 text-center" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="text-[14px] py-10 text-center" style={{ color: 'var(--color-text-tertiary)' }}>
                 No tasks assigned.
               </div>
             )}
@@ -3874,17 +3445,12 @@ export function AgentsPage() {
 
         {/* Tab: Memory */}
         {detailTab === 'memory' && (
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}
-          >
-            <h3 className="text-sm font-medium mb-3 flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
-              <Brain size={14} /> Summary Memory
-            </h3>
-            <p className="whitespace-pre-wrap text-sm" style={{ color: 'var(--color-text)' }}>
+          <section className="max-w-3xl">
+            <SectionHeading>Summary Memory</SectionHeading>
+            <p className="whitespace-pre-wrap text-[15px] leading-[22px] mt-3 max-w-[72ch]" style={{ color: selectedAgent.summary_memory ? 'var(--color-text)' : 'var(--color-text-tertiary)' }}>
               {selectedAgent.summary_memory || 'Agent has no stored memory yet.'}
             </p>
-          </div>
+          </section>
         )}
 
         {/* Tab: Learning */}
@@ -3894,7 +3460,7 @@ export function AgentsPage() {
 
         {/* Tab: Logs */}
         {detailTab === 'logs' && (
-          <LogsTab agentId={selectedAgent.id} />
+          <LogsTab agentId={selectedAgent.id} line={line} />
         )}
         </div>
       </div>
@@ -3903,9 +3469,11 @@ export function AgentsPage() {
 
   // ── List View ───────────────────────────────────────────────────────────
 
+  const runningCount = managedAgents.filter((a) => a.status === 'running').length;
+
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-10">
-      <div className="max-w-5xl mx-auto">
+    <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
+      <div className="max-w-6xl mx-auto">
       {/* Launch wizard modal */}
       {showWizard && (
         <LaunchWizard
@@ -3918,84 +3486,78 @@ export function AgentsPage() {
         />
       )}
 
-      <header className="mb-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-            Agents
-          </h1>
+      <PageHeader
+        title="Agents"
+        meta={
+          managedAgents.length > 0
+            ? `${managedAgents.length} agent${managedAgents.length !== 1 ? 's' : ''}${runningCount > 0 ? ` · ${runningCount} running` : ''}`
+            : undefined
+        }
+        actions={
           <button
             onClick={() => agentManagerAvailable && setShowWizard(true)}
             disabled={agentManagerAvailable === false}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              background: agentManagerAvailable === false ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
-              color: agentManagerAvailable === false ? 'var(--color-text-tertiary)' : 'var(--color-on-accent)',
-            }}
+            className="tn-btn tn-btn-primary"
           >
             <Plus size={15} /> New Agent
           </button>
-        </div>
-        <p className="text-sm mt-2 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
-          Long-running autonomous agents that can monitor sources, run tasks on a schedule, and message you through connected channels.
-        </p>
-      </header>
+        }
+      />
+      <p className="text-[14px] mt-3 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
+        Long-running autonomous agents that can monitor sources, run tasks on a schedule, and message you through connected channels.
+      </p>
 
       {agentManagerAvailable === false && (
-        <div
-          className="mx-4 mt-2 px-4 py-3 rounded-lg flex items-center gap-3 text-sm"
-          style={{
-            background: 'var(--color-accent-amber-subtle)',
-            border: '1px solid color-mix(in srgb, var(--color-warning) 20%, transparent)',
-            color: 'var(--color-accent-amber)',
-          }}
-        >
-          <AlertTriangle size={16} />
-          <span>Agent manager is not enabled. Set <code className="font-mono text-xs">agent_manager.enabled = true</code> in your config.</span>
+        <div className="tn-panel tn-rule-fail mt-6 px-4 py-3 flex items-center gap-3 text-[14px]">
+          <AlertTriangle size={16} className="shrink-0" style={{ color: 'var(--fail)' }} />
+          <span>Agent manager is not enabled. Set <code className="tn-mono text-[13px]">agent_manager.enabled = true</code> in your config.</span>
         </div>
       )}
 
-      {/* Agent cards grid */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-        {managedAgents.map((a) => (
-          <AgentCard
-            key={a.id}
-            agent={a}
-            onClick={() => {
-              setSelectedAgentId(a.id);
-              setDetailTab('overview');
-            }}
-            onPause={handlePause}
-            onResume={handleResume}
-            onRun={handleRun}
-            onRecover={handleRecover}
-            onDelete={handleDelete}
-            onChat={(id) => {
-              setSelectedAgentId(id);
-              setDetailTab('interact');
-            }}
-            onEdit={(id) => {
-              setSelectedAgentId(id);
-              setDetailTab('overview');
-            }}
-          />
-        ))}
-      </div>
+      {/* Agent lines */}
+      {managedAgents.length > 0 && (
+        <ul className="list-none mt-8" aria-label="Agents" style={{ borderTop: '2px solid var(--color-text)' }}>
+          {managedAgents.map((a) => (
+            <AgentCard
+              key={a.id}
+              agent={a}
+              onClick={() => {
+                setSelectedAgentId(a.id);
+                setDetailTab('overview');
+              }}
+              onPause={handlePause}
+              onResume={handleResume}
+              onRun={handleRun}
+              onRecover={handleRecover}
+              onDelete={handleDelete}
+              onChat={(id) => {
+                setSelectedAgentId(id);
+                setDetailTab('interact');
+              }}
+              onEdit={(id) => {
+                setSelectedAgentId(id);
+                setDetailTab('overview');
+              }}
+            />
+          ))}
+        </ul>
+      )}
 
       {managedAgents.length === 0 && (
-        <div className="text-center py-16" style={{ color: 'var(--color-text-tertiary)' }}>
-          <Bot size={48} className="mx-auto mb-4 opacity-30" />
-          <p className="mb-2 font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        <div className="py-16 max-w-md">
+          <div aria-hidden="true" className="flex items-center w-40 mb-6">
+            <Station line="none" state="unavailable" className="relative z-[1]" />
+            <span className="flex-1 h-[5px] -mx-0.5" style={{ background: 'var(--color-border)' }} />
+            <Station line="none" state="unavailable" className="relative z-[1]" />
+          </div>
+          <p className="mb-2 text-[17px] font-semibold" style={{ color: 'var(--color-text)' }}>
             No agents yet
           </p>
-          <p className="text-sm mb-6">Create your first agent to get started with autonomous task management.</p>
+          <p className="text-[14px] mb-6" style={{ color: 'var(--color-text-secondary)' }}>Create your first agent to get started with autonomous task management.</p>
           <button
             onClick={() => agentManagerAvailable && setShowWizard(true)}
             disabled={agentManagerAvailable === false}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              background: agentManagerAvailable === false ? 'var(--color-bg-tertiary)' : 'var(--color-accent)',
-              color: agentManagerAvailable === false ? 'var(--color-text-tertiary)' : 'var(--color-on-accent)',
-            }}
+            className="tn-btn tn-btn-primary"
           >
             <Plus size={15} /> Launch your first agent
           </button>
