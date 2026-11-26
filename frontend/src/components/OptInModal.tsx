@@ -123,7 +123,7 @@ export function OptInModal({ onClose }: OptInModalProps) {
         <h2 id="sharing-modal-title" className="text-[24px] leading-[30px] font-bold pr-10 mb-2" style={{ color: 'var(--color-text)' }}>
           Win a Mac mini
         </h2>
-        <p className="text-[15px] leading-[22px] mb-4" style={{ color: 'var(--color-text-secondary)' }}>
+        <p className="text-[15px] leading-[22px] mb-4" style={{ color: 'var(--color-text-secondary)', textWrap: 'pretty' }}>
           Share your savings on the leaderboard for a chance to win a Mac mini.
         </p>
 
