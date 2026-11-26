@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Square, Paperclip, Search } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect, type CSSProperties } from 'react';
+import { Send, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore, generateId } from '../../lib/store';
 import { streamChat, streamResearch } from '../../lib/sse';
@@ -11,6 +11,7 @@ import {
   resolveChatEngine,
 } from '../../lib/chat-telemetry';
 import { MicButton } from './MicButton';
+import { Kbd, Station } from '../transit';
 import { useSpeech } from '../../hooks/useSpeech';
 import type {
   ChatMessage,
@@ -565,25 +566,20 @@ export function InputArea() {
   };
 
   return (
-    <div className="px-4 pb-4 pt-2" style={{ maxWidth: 'var(--chat-max-width)', margin: '0 auto', width: '100%' }}>
+    <div className="px-4 sm:px-6 pb-4 pt-2 w-full mx-auto" style={{ maxWidth: 'var(--chat-max-width)' }}>
       {deepResearch && corpusSync.syncing && corpusSync.itemsSynced > 0 && (
         <div
-          className="mb-1.5 text-[11px] leading-snug hw-mono"
-          style={{ color: 'var(--color-text-tertiary)' }}
+          className="mb-1.5 text-[12px] leading-snug tn-mono"
+          style={{ color: 'var(--color-text-secondary)' }}
         >
           Searching over{' '}
-          <span key={corpusSync.itemsSynced} className="sync-bump" style={{ color: 'var(--color-text-secondary)' }}>
+          <span key={corpusSync.itemsSynced} className="sync-bump" style={{ color: 'var(--color-text)' }}>
             {corpusSync.itemsSynced.toLocaleString()}
           </span>{' '}
           items — sync in progress.
         </div>
       )}
-      <div
-        className="flex items-center gap-2 rounded-xl px-4 py-3 transition-colors studio-glass border"
-        style={{
-          boxShadow: 'var(--shadow-md)',
-        }}
-      >
+      <div className="tn-composer">
         <textarea
           ref={textareaRef}
           value={input}
@@ -591,31 +587,23 @@ export function InputArea() {
           onKeyDown={handleKeyDown}
           placeholder={selectedModel ? 'Ask Friday or run a command...' : 'Pick a model first (⌘K)...'}
           rows={1}
-          className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed"
+          aria-label="Message"
+          className="block w-full bg-transparent outline-none resize-none text-[15px] leading-[22px] px-3 pt-3 pb-1"
           style={{ color: 'var(--color-text)', maxHeight: '200px' }}
           disabled={streamState.isStreaming || modelLoading}
         />
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 px-2 pb-2 pt-1">
           <button
             type="button"
             onClick={() => setDeepResearch(!deepResearch)}
             disabled={streamState.isStreaming}
             aria-pressed={deepResearch}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer disabled:cursor-default disabled:opacity-50"
-            style={{
-              background: deepResearch ? 'var(--color-accent-blue-subtle)' : 'var(--color-surface)',
-              border: `1px solid ${deepResearch ? 'var(--color-accent-blue)' : 'var(--color-border)'}`,
-              color: deepResearch ? 'var(--color-text)' : 'var(--color-text-secondary)',
-            }}
+            className="tn-btn tn-btn-sm tn-toggle"
+            style={{ '--station-fill': 'var(--color-surface)' } as CSSProperties}
             title={deepResearch ? 'Deep Research: on' : 'Deep Research: off'}
           >
+            <Station line="data" state={deepResearch ? 'current' : 'open'} size={12} />
             <span>Deep Research</span>
-            <span
-              className="studio-dot"
-              style={{
-                background: deepResearch ? 'var(--color-accent-blue)' : 'var(--color-text-tertiary)',
-              }}
-            />
           </button>
 
           <MicButton
@@ -625,42 +613,40 @@ export function InputArea() {
             reason={micReason}
           />
 
+          <span className="flex-1" />
+
           {isCurrentChatStreaming ? (
             <button
+              type="button"
               onClick={stopStreaming}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer"
-              style={{ background: 'var(--color-error)', color: '#ffffff' }}
+              className="tn-btn tn-btn-invert shrink-0"
               title="Stop generating"
               aria-label="Stop generating"
             >
-              <Square size={13} />
+              <Square size={12} fill="currentColor" />
               <span>Stop</span>
             </button>
           ) : (
             <button
+              type="button"
               onClick={sendMessage}
               disabled={streamState.isStreaming || !input.trim() || modelLoading || !selectedModel}
               title={selectedModel ? 'Send message' : 'Pick a model first (⌘K)'}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-default"
+              className="tn-btn tn-btn-primary shrink-0"
               aria-label="Send message"
-              style={{
-                background: input.trim() ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-                color: input.trim() ? 'var(--color-on-accent)' : 'var(--color-text-tertiary)',
-                border: input.trim() ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
-              }}
             >
               <span>Send</span>
-              <Send size={12} />
+              <Send size={14} />
             </button>
           )}
         </div>
       </div>
-      <div className="flex items-center justify-between mt-2 px-1 text-[11px] studio-mono" style={{ color: 'var(--color-text-tertiary)' }}>
-        <span>
-          <kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> newline
+      <div className="flex items-center justify-between gap-3 mt-2 px-0.5 text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        <span className="flex items-center gap-1.5 flex-wrap">
+          <Kbd>Enter</Kbd> send <span aria-hidden="true">·</span> <Kbd>Shift+Enter</Kbd> newline
         </span>
-        <span>
-          <kbd>⌘K</kbd> switch model
+        <span className="hidden sm:flex items-center gap-1.5">
+          <Kbd>⌘K</Kbd> switch model
         </span>
       </div>
     </div>

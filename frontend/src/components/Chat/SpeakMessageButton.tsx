@@ -23,12 +23,10 @@ export function SpeakMessageButton({ messageId, content }: Props) {
   return (
     <>
       <button
+        type="button"
         onClick={() => (busy ? stop() : speak(messageId, content))}
-        className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-        style={{
-          color: busy ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-          opacity: busy ? 1 : undefined,
-        }}
+        className={`tn-btn tn-btn-ghost tn-btn-sm ${busy ? '' : 'tn-reveal'}`}
+        style={{ color: busy ? 'var(--color-text)' : 'var(--color-text-secondary)' }}
         title={
           messageError ||
           (isMine && state === 'loading'
@@ -40,9 +38,10 @@ export function SpeakMessageButton({ messageId, content }: Props) {
         aria-label={busy ? 'Stop reading message' : 'Read message aloud'}
       >
         {busy ? <Square size={14} /> : <Volume2 size={14} />}
+        <span aria-hidden="true">{busy ? 'Stop' : 'Read aloud'}</span>
       </button>
       {messageError && (
-        <span role="alert" className="text-xs" style={{ color: 'var(--color-error)' }}>
+        <span role="alert" className="text-[12px] font-medium" style={{ color: 'var(--fail)' }}>
           {messageError}
         </span>
       )}

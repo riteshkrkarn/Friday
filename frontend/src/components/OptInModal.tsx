@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Trophy, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useAppStore } from '../lib/store';
 import { isProfane } from '../lib/profanity';
 import { fetchAnalyticsIdentity, saveAnalyticsPreference } from '../lib/analytics';
@@ -82,21 +82,10 @@ export function OptInModal({ onClose }: OptInModalProps) {
   };
 
   const busy = saving || analyticsLoading;
-  const primaryStyle = {
-    background: 'var(--color-accent)',
-    color: 'var(--color-on-accent)',
-  };
-  const inputStyle = {
-    background: 'var(--color-bg-secondary)',
-    border: '1px solid var(--color-border)',
-    color: 'var(--color-text)',
-  };
-  const buttonClass = 'min-h-10 rounded-xl px-3 py-2 text-sm font-medium cursor-pointer disabled:opacity-50';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.65)' }}
+      className="tn-scrim z-50 flex items-center justify-center p-4"
       onClick={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}
     >
       <div
@@ -104,12 +93,7 @@ export function OptInModal({ onClose }: OptInModalProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="sharing-modal-title"
-        className="relative w-full max-w-md mx-4 max-h-[90dvh] overflow-y-auto rounded-2xl p-4 sm:p-6"
-        style={{
-          background: 'var(--color-bg)',
-          border: '1px solid var(--color-border)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.25)',
-        }}
+        className="tn-dialog relative w-full max-w-[480px] max-h-[90dvh] overflow-y-auto p-5 sm:p-6"
         onKeyDown={(event) => {
           if (event.key === 'Escape' && !saving) onClose();
           if (event.key !== 'Tab') return;
@@ -133,34 +117,27 @@ export function OptInModal({ onClose }: OptInModalProps) {
           aria-label="Close sharing choices"
           onClick={onClose}
           disabled={saving}
-          className="absolute right-3 top-3 p-1.5 rounded-lg cursor-pointer"
-          style={{ color: 'var(--color-text-tertiary)' }}
+          className="tn-icon-btn absolute right-3 top-3"
         ><X size={16} /></button>
 
-        <div className="flex items-center gap-3 pr-6 mb-2">
-          <div
-            className="flex items-center justify-center w-9 h-9 rounded-xl shrink-0"
-            style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-          ><Trophy size={20} /></div>
-          <h2 id="sharing-modal-title" className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
-            Win a Mac mini
-          </h2>
-        </div>
-        <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+        <h2 id="sharing-modal-title" className="text-[24px] leading-[30px] font-bold pr-10 mb-2" style={{ color: 'var(--color-text)' }}>
+          Win a Mac mini
+        </h2>
+        <p className="text-[15px] leading-[22px] mb-4" style={{ color: 'var(--color-text-secondary)' }}>
           Share your savings on the leaderboard for a chance to win a Mac mini.
         </p>
 
-        {error && <p role="alert" className="text-xs mb-3" style={{ color: 'var(--color-error)' }}>{error}</p>}
-        {status && <p role="status" className="text-xs mb-3" style={{ color: 'var(--color-text-secondary)' }}>{status}</p>}
+        {error && <p role="alert" className="text-[13px] font-medium mb-3" style={{ color: 'var(--fail)' }}>{error}</p>}
+        {status && <p role="status" className="text-[13px] mb-3" style={{ color: 'var(--color-text-secondary)' }}>{status}</p>}
 
         {!joined && (
           <form
             id="sharing-entry-form"
             onSubmit={(event) => { event.preventDefault(); void handleJoin(false); }}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4"
           >
             <div>
-              <label htmlFor="sharing-display-name" className="block text-xs mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+              <label htmlFor="sharing-display-name" className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>
                 Display name (public)
               </label>
               <input
@@ -171,13 +148,12 @@ export function OptInModal({ onClose }: OptInModalProps) {
                 maxLength={30}
                 onChange={(event) => { setName(event.target.value); setError(''); }}
                 placeholder="Your leaderboard name"
-                className="w-full rounded-lg px-3 py-2 text-base sm:text-sm"
-                style={inputStyle}
+                className="tn-input"
                 autoFocus
               />
             </div>
             <div>
-              <label htmlFor="sharing-contact-email" className="block text-xs mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+              <label htmlFor="sharing-contact-email" className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--color-text)' }}>
                 Email (not displayed)
               </label>
               <input
@@ -187,15 +163,14 @@ export function OptInModal({ onClose }: OptInModalProps) {
                 disabled={saving}
                 onChange={(event) => { setEmail(event.target.value); setError(''); }}
                 placeholder="you@example.com"
-                className="w-full rounded-lg px-3 py-2 text-base sm:text-sm"
-                style={inputStyle}
+                className="tn-input"
               />
             </div>
           </form>
         )}
 
-        <div className="text-xs leading-relaxed mb-3" style={{ color: 'var(--color-text-secondary)' }}>
-          <p className="mb-1">
+        <div className="text-[13px] leading-5 mb-5 pt-3" style={{ color: 'var(--color-text-secondary)', borderTop: '1px solid var(--color-border)' }}>
+          <p className="mb-1.5">
             Optional analytics sends usage counts, timings, errors, environment metadata,
             and a random ID to PostHog.
           </p>
@@ -207,47 +182,45 @@ export function OptInModal({ onClose }: OptInModalProps) {
             href="https://open-jarvis.github.io/OpenJarvis/telemetry/"
             target="_blank"
             rel="noreferrer"
-            className="inline-block underline mt-1"
+            className="tn-link inline-block mt-1.5"
           >Privacy details</a>
         </div>
 
         {joined ? (
-          <div className="space-y-2">
-            <p className="text-sm mb-3" style={{ color: 'var(--color-text)' }}>
+          <div className="flex flex-col gap-2">
+            <p className="text-[14px] mb-2" style={{ color: 'var(--color-text)' }}>
               Leaderboard sharing enabled · Analytics {analyticsEnabled ? 'on' : 'off'}
             </p>
             <button
               type="button"
               onClick={() => void handleAnalytics(!analyticsEnabled, false)}
               disabled={busy}
-              className={buttonClass + ' w-full'}
-              style={primaryStyle}
+              className="tn-btn tn-btn-primary w-full"
             >{saving ? 'Saving…' : analyticsEnabled ? 'Disable analytics' : 'Enable analytics'}</button>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={onClose} disabled={saving} className={buttonClass} style={{ color: 'var(--color-text)' }}>Done</button>
+              <button type="button" onClick={onClose} disabled={saving} className="tn-btn">Done</button>
               <button
                 type="button"
                 onClick={() => { setOptIn(false, '', ''); setJoined(false); onClose(); }}
                 disabled={saving}
-                className={buttonClass}
-                style={{ color: 'var(--color-text-secondary)' }}
+                className="tn-btn"
+                style={{ whiteSpace: 'normal', height: 'auto', minHeight: 36 }}
               >Stop leaderboard updates</button>
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={() => void handleJoin(true)}
               disabled={busy}
-              className={buttonClass + ' w-full'}
-              style={primaryStyle}
+              className="tn-btn tn-btn-primary w-full"
             >{saving ? 'Saving…' : 'Enable analytics & enter giveaway'}</button>
             <div className="grid grid-cols-2 gap-2">
-              <button type="submit" form="sharing-entry-form" disabled={busy} className={buttonClass} style={{ color: 'var(--color-text)' }}>
+              <button type="submit" form="sharing-entry-form" disabled={busy} className="tn-btn" style={{ whiteSpace: 'normal', height: 'auto', minHeight: 36 }}>
                 Enter giveaway only
               </button>
-              <button type="button" onClick={() => void handleAnalytics(true, true)} disabled={busy} className={buttonClass} style={{ color: 'var(--color-text)' }}>
+              <button type="button" onClick={() => void handleAnalytics(true, true)} disabled={busy} className="tn-btn" style={{ whiteSpace: 'normal', height: 'auto', minHeight: 36 }}>
                 Enable analytics only
               </button>
             </div>
@@ -255,8 +228,7 @@ export function OptInModal({ onClose }: OptInModalProps) {
               type="button"
               onClick={() => void handleAnalytics(false, true)}
               disabled={busy}
-              className={buttonClass + ' w-full border'}
-              style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
+              className="tn-btn w-full"
             >Continue without sharing</button>
           </div>
         )}

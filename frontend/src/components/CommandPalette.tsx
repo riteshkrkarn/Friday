@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Cpu, X, Download, Loader2, Trash2, Check, Cloud, Key, Eye, EyeOff } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, type CSSProperties } from 'react';
+import { Search, X, Download, Loader2, Trash2, Check, Eye, EyeOff } from 'lucide-react';
 import { useAppStore } from '../lib/store';
 import {
   pullModel,
@@ -12,6 +12,8 @@ import {
 } from '../lib/api';
 import { CATALOGUE_MODELS, CLOUD_PROVIDERS } from '../lib/model-catalogue';
 import type { CloudProvider } from '../lib/model-catalogue';
+import { LINE_NAMES, lineColor, lineForModel, type Line, type StationState } from '../lib/transit-lines';
+import { Kbd, Station } from './transit';
 
 type Tab = 'installed' | 'catalogue' | 'cloud';
 
@@ -54,7 +56,7 @@ export function CommandPalette() {
   }, [desktopKeyStorage]);
 
   const filtered = tab === 'installed'
-    ? (query
+    ? sortByLine(query
         ? models.filter((m) => m.id.toLowerCase().includes(query.toLowerCase()))
         : models)
     : tab === 'catalogue'
@@ -208,43 +210,53 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4"
       onClick={() => setCommandPaletteOpen(false)}
     >
-      <div className="fixed inset-0 backdrop-blur-sm" style={{ background: 'rgba(5, 8, 15, 0.65)' }} />
+      <div className="tn-scrim" aria-hidden="true" />
 
       <div
-        className="relative w-full max-w-lg rounded-2xl overflow-hidden studio-glass border"
-        style={{
-          boxShadow: 'var(--shadow-lg)',
-        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Model picker"
+        className="tn-dialog relative w-full max-w-[640px] overflow-hidden flex flex-col"
+        style={{ '--station-fill': 'var(--color-surface)', maxHeight: '75vh' } as CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Tabs */}
-        <div className="flex" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          {(['installed', 'catalogue', 'cloud'] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className="flex-1 px-3 py-2.5 text-xs font-medium transition-colors cursor-pointer"
-              style={{
-                color: tab === t ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-                borderBottom: tab === t ? '2px solid var(--color-accent)' : '2px solid transparent',
-                background: 'transparent',
-              }}
-            >
-              {TAB_LABELS[t]}
-            </button>
-          ))}
+        <div className="flex items-end gap-4 pl-5 pr-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <div role="tablist" aria-label="Model sources" className="tn-tabs flex-1 min-w-0 overflow-x-auto" style={{ borderBottom: 'none', gap: 20 }}>
+            {(['installed', 'catalogue', 'cloud'] as Tab[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={tab === t}
+                onClick={() => setTab(t)}
+                className="tn-tab shrink-0"
+              >
+                {TAB_LABELS[t]}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setCommandPaletteOpen(false)}
+            className="tn-icon-btn mb-1.5 shrink-0"
+            aria-label="Close model picker"
+            title="Close"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* Search (not for cloud tab) */}
         {tab !== 'cloud' && (
           <div
-            className="flex items-center gap-3 px-4 py-3"
+            className="flex items-center gap-3 px-5 h-12 shrink-0"
             style={{ borderBottom: '1px solid var(--color-border)' }}
           >
-            <Search size={18} style={{ color: 'var(--color-text-tertiary)' }} />
+            <Search size={16} style={{ color: 'var(--color-text-tertiary)' }} />
             <input
               ref={inputRef}
               type="text"
@@ -252,94 +264,90 @@ export function CommandPalette() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={tab === 'installed' ? 'Search installed models...' : 'Search models to download...'}
-              className="flex-1 bg-transparent outline-none text-sm"
+              aria-label={tab === 'installed' ? 'Search installed models' : 'Search models to download'}
+              className="flex-1 bg-transparent outline-none text-[15px]"
               style={{ color: 'var(--color-text)' }}
             />
-            <button
-              onClick={() => setCommandPaletteOpen(false)}
-              className="p-1 rounded cursor-pointer"
-              style={{ color: 'var(--color-text-tertiary)' }}
-            >
-              <X size={16} />
-            </button>
           </div>
         )}
 
         {/* Status messages */}
         {pullError && (
-          <div className="px-4 py-2 text-xs" style={{ color: 'var(--color-error)', background: 'rgba(220,38,38,0.05)' }}>
+          <div role="alert" className="tn-rule-fail px-5 py-2 text-[13px] font-medium shrink-0" style={{ color: 'var(--fail)' }}>
             {pullError}
           </div>
         )}
         {pullSuccess && (
-          <div className="px-4 py-2 text-xs flex items-center gap-1.5" style={{ color: 'var(--color-success)', background: 'color-mix(in srgb, var(--color-success) 5%, transparent)' }}>
-            <Check size={12} /> Downloaded {pullSuccess} successfully
+          <div role="status" className="tn-rule-top px-5 py-2 text-[13px] flex items-center gap-1.5 shrink-0" style={{ color: 'var(--color-text)' }}>
+            <Check size={14} /> Downloaded {pullSuccess} successfully
           </div>
         )}
         {tab === 'cloud' && cloudKeyError && (
-          <div className="px-4 py-2 text-xs" style={{ color: 'var(--color-error)', background: 'rgba(220,38,38,0.05)' }}>
+          <div role="alert" className="tn-rule-fail px-5 py-2 text-[13px] font-medium shrink-0" style={{ color: 'var(--fail)' }}>
             {cloudKeyError}
           </div>
         )}
 
         {/* Results */}
-        <div className="max-h-[400px] overflow-y-auto py-2">
+        <div className="flex-1 min-h-0 max-h-[400px] overflow-y-auto py-2">
           {tab === 'installed' ? (
             filtered.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="px-5 py-8 text-[14px]" style={{ color: 'var(--color-text-secondary)' }}>
                 {models.length === 0
                   ? 'No models available — switch to "Download" to get started'
                   : 'No matching models'}
               </div>
             ) : (
-              (filtered as typeof models).map((model, idx) => {
-                const isActive = model.id === selectedModel;
-                const isSelected = idx === selectedIdx;
-                const isDeleting = deleting === model.id;
-                return (
-                  <div
-                    key={model.id}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 transition-colors"
-                    style={{ background: isSelected ? 'var(--color-bg-secondary)' : 'transparent' }}
-                    onMouseEnter={() => setSelectedIdx(idx)}
-                  >
-                    <button
-                      onClick={() => handleSelect(model.id, model.owned_by)}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
-                      style={{ background: 'none', border: 'none', padding: 0 }}
-                    >
-                      {model.owned_by === 'litellm' ? (
-                        <Cloud size={16} style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }} />
-                      ) : (
-                        <Cpu size={16} style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }} />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm truncate" style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text)', fontWeight: isActive ? 500 : 400 }}>
-                          {model.id}
-                        </div>
-                      </div>
-                      {isActive && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
-                          Active
-                        </span>
-                      )}
-                    </button>
-                    {model.owned_by !== 'litellm' && (
-                      <button
-                        onClick={() => handleDelete(model.id)}
-                        disabled={isDeleting}
-                        className="p-1 rounded transition-colors cursor-pointer"
-                        style={{ color: 'var(--color-text-tertiary)', opacity: 0 }}
-                        title="Delete model"
-                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--color-error)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.color = 'var(--color-text-tertiary)'; }}
+              groupByLine(filtered as typeof models).map((group) => (
+                <div key={group.line} className="mb-2 last:mb-0">
+                  <LineHeader line={group.line} count={group.rows.length} />
+                  {group.rows.map(({ model, idx }, i) => {
+                    const isActive = model.id === selectedModel;
+                    const isSelected = idx === selectedIdx;
+                    const isDeleting = deleting === model.id;
+                    return (
+                      <div
+                        key={model.id}
+                        className="tn-pick-row group flex items-stretch gap-3 h-10 pl-5 pr-2"
+                        data-selected={isSelected}
+                        onMouseEnter={() => setSelectedIdx(idx)}
                       >
-                        {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                      </button>
-                    )}
-                  </div>
-                );
-              })
+                        <Track line={group.line} state={isActive ? 'current' : 'open'} first={i === 0} last={i === group.rows.length - 1} />
+                        <button
+                          type="button"
+                          onClick={() => handleSelect(model.id, model.owned_by)}
+                          className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
+                          aria-current={isActive || undefined}
+                        >
+                          <span
+                            className="tn-mono text-[13px] truncate flex-1 min-w-0"
+                            style={{ color: 'var(--color-text)', fontWeight: isActive ? 700 : 400 }}
+                          >
+                            {model.id}
+                          </span>
+                          {isActive && (
+                            <span className="text-[12px] font-bold shrink-0" style={{ color: 'var(--color-text)' }}>
+                              Active
+                            </span>
+                          )}
+                        </button>
+                        {model.owned_by !== 'litellm' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(model.id)}
+                            disabled={isDeleting}
+                            className={`tn-icon-btn tn-pick-del self-center ${isDeleting ? '' : 'tn-reveal'}`}
+                            title="Delete model"
+                            aria-label={`Delete ${model.id}`}
+                          >
+                            {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
             )
           ) : tab === 'catalogue' ? (
             <>
@@ -347,21 +355,23 @@ export function CommandPalette() {
                 const isPulling = pulling === model.id;
                 const justInstalled = pullSuccess === model.id;
                 return (
-                  <div key={model.id} className="flex items-center gap-3 w-full px-4 py-2.5">
-                    <Download size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+                  <div
+                    key={model.id}
+                    className="flex items-center gap-3 w-full px-5 py-2.5"
+                    style={{ borderBottom: '1px solid var(--color-border)' }}
+                  >
+                    <Station line="local" state={justInstalled ? 'open' : 'unavailable'} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm truncate" style={{ color: 'var(--color-text)' }}>{model.id}</div>
-                      <div className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>{model.desc} &middot; {model.size}</div>
+                      <div className="tn-mono text-[13px] truncate" style={{ color: 'var(--color-text)' }}>{model.id}</div>
+                      <div className="text-[12px] truncate" style={{ color: 'var(--color-text-secondary)' }}>
+                        {model.desc} &middot; <span className="tn-mono">{model.size}</span>
+                      </div>
                     </div>
                     <button
+                      type="button"
                       onClick={() => handlePull(model.id)}
                       disabled={isPulling || !!pulling}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium cursor-pointer"
-                      style={{
-                        background: justInstalled ? 'var(--color-accent-subtle)' : 'var(--color-accent)',
-                        color: justInstalled ? 'var(--color-accent)' : 'var(--color-on-accent)',
-                        opacity: (isPulling || (pulling && !isPulling)) ? 0.5 : 1,
-                      }}
+                      className={`tn-btn tn-btn-sm shrink-0 ${justInstalled ? '' : 'tn-btn-primary'}`}
                     >
                       {isPulling ? <><Loader2 size={12} className="animate-spin" /> Downloading...</> :
                        justInstalled ? <><Check size={12} /> Installed</> :
@@ -370,35 +380,37 @@ export function CommandPalette() {
                   </div>
                 );
               })}
-              <div className="px-4 py-3 mt-1" style={{ borderTop: '1px solid var(--color-border)' }}>
-                <div className="text-[11px] mb-2" style={{ color: 'var(--color-text-tertiary)' }}>Or enter any Ollama model name:</div>
+              <div className="px-5 pt-4 pb-3">
+                <label htmlFor="custom-model-pull" className="block text-[13px] mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                  Or enter any Ollama model name:
+                </label>
                 <div className="flex gap-2">
                   <input
+                    id="custom-model-pull"
                     type="text" value={customModel}
                     onChange={(e) => setCustomModel(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCustomPull(); } }}
                     placeholder="e.g. codellama:7b"
-                    className="flex-1 text-sm px-3 py-1.5 rounded-lg outline-none"
-                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                    className="tn-input tn-mono flex-1"
                   />
                   <button
+                    type="button"
                     onClick={handleCustomPull} disabled={!customModel.trim() || !!pulling}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
-                    style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)', opacity: (!customModel.trim() || pulling) ? 0.5 : 1 }}
+                    className="tn-btn shrink-0"
                   >
-                    <Download size={12} /> Pull
+                    <Download size={14} /> Pull
                   </button>
                 </div>
               </div>
             </>
           ) : (
             /* ── Cloud Models tab ── */
-            <div className="px-4 py-2">
-              <div className="text-[11px] mb-3" style={{ color: 'var(--color-text-tertiary)' }}>
+            <div className="px-5 py-2">
+              <p className="text-[13px] mb-4" style={{ color: 'var(--color-text-secondary)' }}>
                 {desktopKeyStorage
                   ? 'Add your API keys to use cloud models. Keys are stored in secure desktop storage.'
                   : 'Configure cloud provider keys in the server environment to use cloud models.'}
-              </div>
+              </p>
 
               {CLOUD_PROVIDERS.map((provider) => {
                 const key = apiKeys[provider.envKey] || '';
@@ -406,83 +418,97 @@ export function CommandPalette() {
                 const hasKey = hasSavedKey || !!key.trim();
                 const isVisible = showKeys[provider.envKey];
                 const isSaving = savingKey === provider.envKey;
+                const keyInputId = `cloud-key-${provider.envKey}`;
 
                 return (
-                  <div key={provider.name} className="mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Cloud size={14} style={{ color: hasKey ? 'var(--color-success)' : 'var(--color-text-tertiary)' }} />
-                      <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{provider.name}</span>
-                      {hasKey && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'color-mix(in srgb, var(--color-success) 10%, transparent)', color: 'var(--color-success)' }}>
-                          Connected
-                        </span>
-                      )}
+                  <div key={provider.name} className="mb-5 last:mb-2">
+                    {/* Provider station */}
+                    <div className="flex items-stretch gap-3 h-9">
+                      <Track line="cloud" state={hasKey ? 'open' : 'unavailable'} first />
+                      <label htmlFor={keyInputId} className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="text-[14px] font-bold truncate" style={{ color: 'var(--color-text)' }}>{provider.name}</span>
+                        {hasKey && (
+                          <span className="text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+                            Connected
+                          </span>
+                        )}
+                      </label>
                     </div>
 
                     {/* API key input */}
-                    <div className="flex gap-1.5 mb-2">
-                      <div className="flex-1 flex items-center rounded-lg" style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)' }}>
-                        <Key size={12} className="ml-2.5 shrink-0" style={{ color: 'var(--color-text-tertiary)' }} />
-                        <input
-                          type={isVisible ? 'text' : 'password'}
-                          value={key}
-                          onChange={(e) => setApiKeys((prev) => ({ ...prev, [provider.envKey]: e.target.value }))}
-                          onBlur={() => handleKeyBlur(provider)}
-                          placeholder={hasSavedKey ? 'Saved in secure storage' : provider.envKey}
-                          disabled={!desktopKeyStorage || isSaving}
-                          className="flex-1 text-xs px-2 py-1.5 bg-transparent outline-none font-mono"
-                          style={{ color: 'var(--color-text)' }}
-                        />
-                        <button
-                          onClick={() => setShowKeys((prev) => ({ ...prev, [provider.envKey]: !prev[provider.envKey] }))}
-                          className="px-2 cursor-pointer" style={{ color: 'var(--color-text-tertiary)' }}
-                        >
-                          {isVisible ? <EyeOff size={12} /> : <Eye size={12} />}
-                        </button>
+                    <div className="flex items-stretch gap-3">
+                      <Rail line="cloud" />
+                      <div className="flex gap-2 flex-1 min-w-0 py-1.5">
+                        <div className="relative flex-1 min-w-0">
+                          <input
+                            id={keyInputId}
+                            type={isVisible ? 'text' : 'password'}
+                            value={key}
+                            onChange={(e) => setApiKeys((prev) => ({ ...prev, [provider.envKey]: e.target.value }))}
+                            onBlur={() => handleKeyBlur(provider)}
+                            placeholder={hasSavedKey ? 'Saved in secure storage' : provider.envKey}
+                            disabled={!desktopKeyStorage || isSaving}
+                            className="tn-input tn-mono"
+                            style={{ paddingRight: 40, fontSize: 13 }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowKeys((prev) => ({ ...prev, [provider.envKey]: !prev[provider.envKey] }))}
+                            className="tn-icon-btn absolute right-0.5 top-0.5"
+                            aria-label={isVisible ? 'Hide key' : 'Show key'}
+                            aria-pressed={!!isVisible}
+                          >
+                            {isVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                        {hasSavedKey && (
+                          <button
+                            type="button"
+                            onClick={() => handleSaveKey(provider, '')}
+                            disabled={isSaving}
+                            className="tn-btn tn-btn-danger shrink-0"
+                          >
+                            {isSaving ? 'Saving' : 'Remove'}
+                          </button>
+                        )}
                       </div>
-                      {hasSavedKey && (
-                        <button
-                          onClick={() => handleSaveKey(provider, '')}
-                          disabled={isSaving}
-                          className="px-2 py-1 rounded-lg text-[10px] cursor-pointer"
-                          style={{ color: 'var(--color-error)', border: '1px solid var(--color-error)', opacity: isSaving ? 0.5 : 1 }}
-                        >
-                          {isSaving ? 'Saving' : 'Remove'}
-                        </button>
-                      )}
                     </div>
 
                     {/* Models for this provider */}
-                    <div className="ml-5 flex flex-col gap-1">
-                      {provider.models.map((model) => {
-                        const isActive = model.id === selectedModel;
-                        return (
-                          <button
-                            key={model.id}
-                            onClick={() => handleSelect(model.id)}
-                              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left cursor-pointer transition-colors"
-                              style={{ background: isActive ? 'var(--color-accent-subtle)' : 'transparent' }}
-                              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-secondary)'; }}
-                              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                    {provider.models.map((model, i) => {
+                      const isActive = model.id === selectedModel;
+                      return (
+                        <button
+                          key={model.id}
+                          type="button"
+                          onClick={() => handleSelect(model.id)}
+                          className="tn-dest flex items-stretch gap-3 w-full min-h-11 text-left cursor-pointer"
+                          aria-current={isActive || undefined}
+                        >
+                          <Track
+                            line="cloud"
+                            state={isActive ? 'current' : hasKey ? 'open' : 'unavailable'}
+                            last={i === provider.models.length - 1}
+                          />
+                          <span className="flex-1 min-w-0 py-1.5">
+                            <span
+                              className="tn-mono block text-[13px] truncate"
+                              style={{ color: 'var(--color-text)', fontWeight: isActive ? 700 : 400 }}
                             >
-                              <Cloud size={12} style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }} />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs truncate" style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text)', fontWeight: isActive ? 500 : 400 }}>
-                                  {model.id}
-                                </div>
-                                <div className="text-[10px] truncate" style={{ color: 'var(--color-text-tertiary)' }}>
-                                  {model.desc}
-                                </div>
-                              </div>
-                              {isActive && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
-                                  Active
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
+                              {model.id}
+                            </span>
+                            <span className="block text-[12px] truncate" style={{ color: 'var(--color-text-secondary)' }}>
+                              {model.desc}
+                            </span>
+                          </span>
+                          {isActive && (
+                            <span className="self-center text-[12px] font-bold pr-2 shrink-0" style={{ color: 'var(--color-text)' }}>
+                              Active
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -492,14 +518,14 @@ export function CommandPalette() {
 
         {/* Footer */}
         <div
-          className="flex items-center gap-4 px-4 py-2 text-[11px]"
-          style={{ borderTop: '1px solid var(--color-border)', color: 'var(--color-text-tertiary)' }}
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5 text-[12px] shrink-0"
+          style={{ borderTop: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}
         >
           {tab === 'installed' ? (
             <>
-              <span><kbd className="font-mono">↑↓</kbd> Navigate</span>
-              <span><kbd className="font-mono">Enter</kbd> Select</span>
-              <span><kbd className="font-mono">Esc</kbd> Close</span>
+              <span className="inline-flex items-center gap-1.5"><Kbd>↑↓</Kbd> Navigate</span>
+              <span className="inline-flex items-center gap-1.5"><Kbd>Enter</Kbd> Select</span>
+              <span className="inline-flex items-center gap-1.5"><Kbd>Esc</Kbd> Close</span>
             </>
           ) : tab === 'catalogue' ? (
             <span>Models are downloaded from the Ollama registry</span>
@@ -509,5 +535,58 @@ export function CommandPalette() {
         </div>
       </div>
     </div>
+  );
+}
+
+const LINE_ORDER: Line[] = ['local', 'cloud', 'tools', 'data', 'none'];
+
+/** Installed models, local line first, then cloud; order within a line is kept. */
+function sortByLine<T extends { id: string; owned_by?: string }>(list: T[]): T[] {
+  return list
+    .map((model, i) => ({ model, i, rank: LINE_ORDER.indexOf(lineForModel(model.id, model.owned_by)) }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .map((entry) => entry.model);
+}
+
+function groupByLine<T extends { id: string; owned_by?: string }>(list: T[]) {
+  const groups: Array<{ line: Line; rows: Array<{ model: T; idx: number }> }> = [];
+  list.forEach((model, idx) => {
+    const line = lineForModel(model.id, model.owned_by);
+    const last = groups[groups.length - 1];
+    if (last && last.line === line) last.rows.push({ model, idx });
+    else groups.push({ line, rows: [{ model, idx }] });
+  });
+  return groups;
+}
+
+function LineHeader({ line, count }: { line: Line; count: number }) {
+  return (
+    <div className="flex items-center gap-2 h-8 px-5">
+      <span aria-hidden="true" style={{ width: 16, height: 5, background: lineColor(line) }} />
+      <span className="text-[13px] font-bold flex-1" style={{ color: 'var(--color-text)' }}>
+        {LINE_NAMES[line] || 'Other'}
+      </span>
+      <span className="tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>{count}</span>
+    </div>
+  );
+}
+
+/** A station on a vertical line; half-rails join it to its neighbours. */
+function Track({ line, state, first = false, last = false }: { line: Line; state: StationState; first?: boolean; last?: boolean }) {
+  return (
+    <span aria-hidden="true" className="relative flex items-center shrink-0" style={{ width: 14 }}>
+      {!first && <span className="absolute" style={{ left: 4.5, width: 5, top: 0, bottom: '50%', background: lineColor(line) }} />}
+      {!last && <span className="absolute" style={{ left: 4.5, width: 5, top: '50%', bottom: 0, background: lineColor(line) }} />}
+      <Station line={line} state={state} className="relative z-[1]" />
+    </span>
+  );
+}
+
+/** The line running past a row that has no station of its own. */
+function Rail({ line }: { line: Line }) {
+  return (
+    <span aria-hidden="true" className="relative shrink-0" style={{ width: 14 }}>
+      <span className="absolute" style={{ left: 4.5, width: 5, top: 0, bottom: 0, background: lineColor(line) }} />
+    </span>
   );
 }

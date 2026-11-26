@@ -60,58 +60,44 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
   };
 
   return (
-    <div
-      className="flex items-center gap-3 px-4 py-3 rounded-xl mb-3"
-      style={{
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
+    <div className="tn-panel flex items-center gap-3 px-3 py-3 mb-4">
       <audio ref={audioRef} src={src} preload="metadata" />
 
       <button
+        type="button"
         onClick={toggle}
-        className="flex items-center justify-center w-9 h-9 rounded-full transition-colors shrink-0"
-        style={{
-          background: 'var(--color-accent)',
-          color: 'var(--color-on-accent)',
-          cursor: 'pointer',
-        }}
+        className="tn-btn shrink-0"
+        style={{ width: 36, padding: 0 }}
+        aria-label={playing ? 'Pause' : 'Play'}
       >
-        {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+        {playing ? <Pause size={16} /> : <Play size={16} />}
       </button>
 
       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <Volume2 size={14} style={{ color: 'var(--color-text-tertiary)' }} />
-          <span
-            className="text-xs font-medium"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
+          <span className="text-[13px] font-medium" style={{ color: 'var(--color-text)' }}>
             Morning Digest
+          </span>
+          <span className="flex-1" />
+          <span className="tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+            {formatTime(currentTime)} / {duration > 0 ? formatTime(duration) : '--:--'}
           </span>
         </div>
 
         <div
-          className="h-1.5 rounded-full cursor-pointer"
+          className="h-[5px] cursor-pointer"
           style={{ background: 'var(--color-bg-tertiary)' }}
           onClick={seek}
         >
           <div
-            className="h-full rounded-full transition-all"
+            className="h-full"
             style={{
               width: `${progress}%`,
-              background: 'var(--color-accent)',
+              background: 'var(--color-text)',
+              transition: 'width 200ms linear',
             }}
           />
-        </div>
-
-        <div
-          className="flex justify-between text-xs"
-          style={{ color: 'var(--color-text-tertiary)' }}
-        >
-          <span>{formatTime(currentTime)}</span>
-          <span>{duration > 0 ? formatTime(duration) : '--:--'}</span>
         </div>
       </div>
     </div>

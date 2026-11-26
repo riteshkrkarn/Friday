@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./SpeakMessageButton', () => ({ SpeakMessageButton: () => null }));
-vi.mock('./XRayFooter', () => ({ XRayFooter: () => null }));
+vi.mock('./RouteStrip', () => ({ RouteStrip: () => null }));
 
 import { MessageBubble } from './MessageBubble';
 import type { ChatMessage } from '../../types';
