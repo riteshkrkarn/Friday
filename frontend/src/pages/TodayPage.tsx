@@ -1,26 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Sun,
-  Mic,
-  Plus,
-  Trophy,
-  FolderGit2,
-  CheckSquare,
-  Flame,
-  Calendar,
-  Sparkles,
-  Check,
-  X,
-  Clock,
-  Wallet,
-  MessageSquare,
-  ArrowUpRight,
-  Search,
-  Bell,
-} from 'lucide-react';
+import { Mic, Plus, Check, X, MessageSquare, ArrowUpRight, Search, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiFetch } from '../lib/api';
+import { Kbd, LineBullet, SectionHeading, StatusText } from '../components/transit';
 
 type ItemType = 'hackathon' | 'project' | 'task' | 'achievement';
 type ItemStatus = 'open' | 'done';
@@ -47,32 +30,32 @@ interface LearnedRule {
 const STORAGE_ITEMS_KEY = 'friday-items-v1';
 const STORAGE_RULES_KEY = 'friday-rules-v1';
 
-const TYPE_META: Record<ItemType, { label: string; icon: typeof Flame; color: string; bg: string }> = {
-  hackathon: {
-    label: 'Hackathon',
-    icon: Flame,
-    color: 'var(--color-accent-amber)',
-    bg: 'var(--color-accent-amber-subtle)',
-  },
-  project: {
-    label: 'Project',
-    icon: FolderGit2,
-    color: 'var(--color-accent)',
-    bg: 'var(--color-accent-subtle)',
-  },
-  task: {
-    label: 'Task',
-    icon: CheckSquare,
-    color: 'var(--color-accent-purple)',
-    bg: 'var(--color-accent-purple-subtle)',
-  },
-  achievement: {
-    label: 'Achievement',
-    icon: Trophy,
-    color: 'var(--color-success)',
-    bg: 'color-mix(in srgb, var(--color-success) 12%, transparent)',
-  },
+/** Item types carry a neutral letter bullet; colour stays reserved for engine lines. */
+const TYPE_META: Record<ItemType, { label: string; letter: string }> = {
+  hackathon: { label: 'Hackathon', letter: 'H' },
+  project: { label: 'Project', letter: 'P' },
+  task: { label: 'Task', letter: 'T' },
+  achievement: { label: 'Achievement', letter: 'A' },
 };
+
+const ROADMAP = [
+  {
+    title: 'Schedule Generation',
+    desc: 'Daily & weekly time-blocking built automatically from your deadlines.',
+  },
+  {
+    title: 'Local-First Finance',
+    desc: 'Recurring bills and expected income routed privately with zero bank logins.',
+  },
+  {
+    title: 'Achievement Prompts',
+    desc: 'Guided resume & portfolio bullets right after a project or hackathon win.',
+  },
+  {
+    title: 'Career & Workload',
+    desc: 'Grounded discussions using your saved projects, pace, and goals.',
+  },
+];
 
 const DEMO_IDS = new Set(['demo-1', 'demo-2', 'demo-3']);
 const DEMO_RULE_IDS = new Set(['rule-1', 'rule-2']);
@@ -324,61 +307,48 @@ export function TodayPage() {
 
   const pendingRules = rules.filter((r) => r.state === 'pending');
 
+  const today = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  const figure = (n: number) => <span className="tn-mono font-bold" style={{ color: 'var(--color-text)' }}>{n}</span>;
+
   return (
-    <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-8">
-      <div className="max-w-5xl mx-auto flex flex-col gap-6">
-        {/* Morning Brief Hero */}
-        <section className="studio-card p-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-medium mb-1.5" style={{ color: 'var(--color-accent-amber)' }}>
-                <Sun size={14} />
-                <span>Personalized Morning Brief</span>
-              </div>
-              <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                Your day at a glance
-              </h1>
-              <p className="text-sm mt-1 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
-                {upcomingCount} upcoming deadline{upcomingCount === 1 ? '' : 's'},{' '}
-                {needsUpdateCount} completed win{needsUpdateCount === 1 ? '' : 's'} waiting for a resume/portfolio update, and{' '}
-                {openCount} open item{openCount === 1 ? '' : 's'}.
+    <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
+      <div className="max-w-[1120px] mx-auto flex flex-col pb-16">
+        {/* Morning Brief */}
+        <section aria-labelledby="today-title" className="tn-rule-top pt-5">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 id="today-title" className="tn-page-title">Your day at a glance</h1>
+              <p className="tn-mono text-[13px] mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                Personalized Morning Brief · {today}
+              </p>
+              <p className="text-[15px] leading-[24px] mt-3 max-w-[65ch]" style={{ color: 'var(--color-text-secondary)' }}>
+                {figure(upcomingCount)} upcoming deadline{upcomingCount === 1 ? '' : 's'},{' '}
+                {figure(needsUpdateCount)} completed win{needsUpdateCount === 1 ? '' : 's'} waiting for a resume/portfolio update, and{' '}
+                {figure(openCount)} open item{openCount === 1 ? '' : 's'}.
               </p>
             </div>
-            <div className="flex items-center gap-2.5 shrink-0">
-              <button
-                onClick={() => navigate('/')}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity hover:opacity-90"
-                style={{
-                  background: 'var(--color-accent)',
-                  color: 'var(--color-on-accent)',
-                }}
-              >
-                <Sparkles size={15} />
-                Discuss in Chat
-              </button>
-            </div>
+            <button type="button" onClick={() => navigate('/')} className="tn-btn tn-btn-primary shrink-0 self-start">
+              <MessageSquare size={16} aria-hidden="true" />
+              Discuss in Chat
+            </button>
           </div>
 
-          {/* Quick Capture Bar */}
+          {/* Quick Capture: the composer bar */}
           <form
             onSubmit={handleAddItem}
-            className="mt-5 pt-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
-            style={{ borderTop: '1px solid var(--color-border-subtle)' }}
+            aria-label="Quick capture"
+            className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 transition-colors duration-[120ms] focus-within:border-[var(--action)]"
+            style={{ border: '2px solid var(--color-input-border)', borderRadius: 2, background: 'var(--color-input-bg)' }}
           >
-            <div
-              className="flex-1 flex items-center gap-2.5 px-3.5 py-2 rounded-lg"
-              style={{
-                background: 'var(--color-bg)',
-                border: '1px solid var(--color-border)',
-              }}
-            >
-              <Mic size={15} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+            <div className="flex-1 min-w-0 flex items-center gap-2.5 px-2">
+              <Mic size={16} aria-hidden="true" style={{ color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
               <input
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
+                aria-label="Quick capture"
                 placeholder="Quick capture a hackathon, project, task, or win... (or tap Right Ctrl ×2)"
-                className="flex-1 bg-transparent text-sm outline-none"
+                className="flex-1 min-w-0 h-9 bg-transparent text-[15px] outline-none"
                 style={{ color: 'var(--color-text)' }}
               />
             </div>
@@ -388,12 +358,7 @@ export function TodayPage() {
                 value={newType}
                 onChange={(e) => setNewType(e.target.value as ItemType)}
                 aria-label="Item type"
-                className="px-3 py-2 rounded-lg text-sm cursor-pointer"
-                style={{
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)',
-                }}
+                className="tn-select w-auto flex-1 sm:flex-none cursor-pointer"
               >
                 <option value="task">Task</option>
                 <option value="hackathon">Hackathon</option>
@@ -406,182 +371,136 @@ export function TodayPage() {
                 value={newDue}
                 onChange={(e) => setNewDue(e.target.value)}
                 aria-label="Due date"
-                className="px-3 py-2 rounded-lg text-sm"
-                style={{
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)',
-                }}
+                className="tn-input tn-mono w-auto flex-1 sm:flex-none"
               />
 
-              <button
-                type="submit"
-                disabled={!newTitle.trim()}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: 'var(--color-bg-tertiary)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <Plus size={15} />
+              <button type="submit" disabled={!newTitle.trim()} className="tn-btn tn-btn-primary">
+                <Plus size={16} aria-hidden="true" />
                 Save
               </button>
             </div>
           </form>
         </section>
 
-        {/* Main 2-column grid: Items Store + Reminders/Rules */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Left 2 cols: Item Store */}
-          <section className="lg:col-span-2 studio-card p-5 flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                  Projects, Hackathons & Tasks
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-                  Tracked locally so Friday remembers what is due and what needs updating.
-                </p>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-x-10 gap-y-12 mt-12">
+          {/* Item Store */}
+          <section aria-labelledby="today-items" className="min-w-0">
+            <SectionHeading
+              as="h2"
+              id="today-items"
+              actions={
+                <label className="relative flex items-center">
+                  <Search size={14} aria-hidden="true" className="absolute left-2.5" style={{ color: 'var(--color-text-tertiary)' }} />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    aria-label="Search items"
+                    placeholder="Search items..."
+                    className="tn-input h-8 w-40 sm:w-48 pl-8 text-[13px]"
+                  />
+                </label>
+              }
+            >
+              Projects, Hackathons & Tasks
+            </SectionHeading>
+            <p className="text-[13px] mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Tracked locally so Friday remembers what is due and what needs updating.
+            </p>
 
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs"
-                style={{
-                  background: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <Search size={13} style={{ color: 'var(--color-text-tertiary)' }} />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search items..."
-                  className="bg-transparent outline-none w-36"
-                  style={{ color: 'var(--color-text)' }}
-                />
-              </div>
-            </div>
-
-            {/* Filter pills */}
-            <div className="flex flex-wrap gap-1.5">
-              {(['all', 'hackathon', 'project', 'task', 'achievement'] as const).map((t) => {
-                const active = filterType === t;
-                return (
-                  <button
-                    key={t}
-                    onClick={() => setFilterType(t)}
-                    className="px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors"
-                    style={{
-                      background: active ? 'var(--color-accent-subtle)' : 'var(--color-bg)',
-                      color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                      border: active
-                        ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)'
-                        : '1px solid var(--color-border)',
-                    }}
-                  >
-                    {t === 'all' ? 'All' : TYPE_META[t].label + 's'}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Item rows */}
-            <div className="flex flex-col gap-2">
-              {filteredItems.length === 0 ? (
-                <div
-                  className="py-10 text-center rounded-lg text-sm"
-                  style={{
-                    background: 'var(--color-bg)',
-                    color: 'var(--color-text-secondary)',
-                    border: '1px dashed var(--color-border)',
-                  }}
+            <div role="tablist" aria-label="Filter items by type" className="tn-tabs mt-3 overflow-x-auto">
+              {(['all', 'hackathon', 'project', 'task', 'achievement'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={filterType === t}
+                  aria-controls="today-item-list"
+                  onClick={() => setFilterType(t)}
+                  className="tn-tab shrink-0"
                 >
+                  {t === 'all' ? 'All' : TYPE_META[t].label + 's'}
+                </button>
+              ))}
+            </div>
+
+            <ul id="today-item-list" className="flex flex-col">
+              {filteredItems.length === 0 ? (
+                <li className="py-8 text-[14px]" style={{ color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>
                   No matching items yet. Use Quick Capture above to add one.
-                </div>
+                </li>
               ) : (
                 filteredItems.map((item) => {
                   const meta = TYPE_META[item.type];
-                  const Icon = meta.icon;
                   const due = formatDueBadge(item.dueDate);
+                  const overdue = !!due && due.text.endsWith('overdue');
+                  const done = item.status === 'done';
                   return (
-                    <div
+                    <li
                       key={item.id}
-                      className="flex items-start gap-3 p-3.5 rounded-lg transition-colors"
-                      style={{
-                        background: 'var(--color-bg)',
-                        border: '1px solid var(--color-border-subtle)',
-                      }}
+                      className="group flex items-start gap-3 py-3 px-1"
+                      style={{ borderBottom: '1px solid var(--color-border)' }}
                     >
                       <button
+                        type="button"
                         onClick={() => toggleItemStatus(item.id)}
-                        aria-label={item.status === 'done' ? 'Mark open' : 'Mark done'}
-                        className="mt-0.5 w-5 h-5 rounded-md flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+                        aria-label={done ? 'Mark open' : 'Mark done'}
+                        aria-pressed={done}
+                        className="mt-px w-5 h-5 flex items-center justify-center shrink-0 cursor-pointer transition-colors duration-[120ms]"
                         style={{
-                          background: item.status === 'done' ? 'var(--color-success)' : 'transparent',
-                          border:
-                            item.status === 'done'
-                              ? '1px solid var(--color-success)'
-                              : '1.5px solid var(--color-text-tertiary)',
-                          color: '#071224',
+                          borderRadius: 2,
+                          background: done ? 'var(--color-text)' : 'transparent',
+                          border: `2px solid ${done ? 'var(--color-text)' : 'var(--color-input-border)'}`,
+                          color: 'var(--color-bg)',
                         }}
                       >
-                        {item.status === 'done' && <Check size={12} strokeWidth={3} />}
+                        {done && <Check size={12} strokeWidth={3} aria-hidden="true" />}
                       </button>
 
+                      <LineBullet letter={meta.letter} size={20} className="mt-px" />
+
                       <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={`text-sm font-medium ${item.status === 'done' ? 'line-through opacity-70' : ''}`}
-                            style={{ color: 'var(--color-text)' }}
-                          >
-                            {item.title}
-                          </span>
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
-                            style={{ background: meta.bg, color: meta.color }}
-                          >
-                            <Icon size={11} />
-                            {meta.label}
-                          </span>
+                        <div
+                          className={`text-[15px] leading-[22px] font-medium break-words ${done ? 'line-through' : ''}`}
+                          style={{ color: done ? 'var(--color-text-tertiary)' : 'var(--color-text)' }}
+                        >
+                          {item.title}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-2 text-[12px] mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                          <span>{meta.label}</span>
                           {due && item.status === 'open' && (
-                            <span
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
-                              style={{
-                                background: due.urgent
-                                  ? 'var(--color-accent-amber-subtle)'
-                                  : 'var(--color-bg-tertiary)',
-                                color: due.urgent
-                                  ? 'var(--color-accent-amber)'
-                                  : 'var(--color-text-secondary)',
-                              }}
-                            >
-                              <Calendar size={11} />
-                              {due.text}
-                            </span>
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span
+                                className="tn-mono"
+                                style={{
+                                  color: overdue ? 'var(--fail)' : due.urgent ? 'var(--color-text)' : 'var(--color-text-secondary)',
+                                  fontWeight: due.urgent ? 600 : 400,
+                                }}
+                              >
+                                {due.text}
+                              </span>
+                            </>
                           )}
                         </div>
 
                         {item.notes && (
-                          <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                          <p className="text-[13px] mt-1 max-w-[65ch]" style={{ color: 'var(--color-text-secondary)' }}>
                             {item.notes}
                           </p>
                         )}
 
-                        {item.status === 'done' && item.portfolioUpdated === false && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <span
-                              className="inline-flex items-center gap-1 text-xs font-medium"
-                              style={{ color: 'var(--color-accent-amber)' }}
-                            >
-                              <Bell size={12} />
+                        {done && item.portfolioUpdated === false && (
+                          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: 'var(--color-text)' }}>
+                              <Bell size={14} aria-hidden="true" />
                               Update reminder: add to resume or portfolio
                             </span>
                             <button
+                              type="button"
                               onClick={() => markPortfolioUpdated(item.id)}
-                              className="text-xs font-medium underline cursor-pointer"
-                              style={{ color: 'var(--color-accent)' }}
+                              className="text-[13px] font-medium underline underline-offset-[3px] cursor-pointer"
+                              style={{ color: 'var(--action)' }}
                             >
                               Mark updated
                             </button>
@@ -590,200 +509,110 @@ export function TodayPage() {
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => deleteItem(item.id)}
                         aria-label={`Remove ${item.title}`}
-                        className="p-1.5 rounded-md cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
-                        style={{ color: 'var(--color-text-tertiary)' }}
+                        className="tn-icon-btn shrink-0 -my-1"
                       >
-                        <X size={14} />
+                        <X size={16} aria-hidden="true" />
                       </button>
-                    </div>
+                    </li>
                   );
                 })
               )}
-            </div>
+            </ul>
           </section>
 
-          {/* Right col: Learned Rules & Channels */}
-          <div className="flex flex-col gap-5">
-            <section className="studio-card p-5 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold tracking-tight" style={{ color: 'var(--color-text)' }}>
-                  Learned Rules
-                </h2>
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{
-                    background: 'var(--color-accent-subtle)',
-                    color: 'var(--color-accent)',
-                  }}
-                >
-                  Always confirms
-                </span>
-              </div>
-              <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          {/* Learned Rules and channels */}
+          <div className="flex flex-col gap-12 min-w-0">
+            <section aria-labelledby="today-rules">
+              <SectionHeading as="h2" id="today-rules" actions={<StatusText>Always confirms</StatusText>}>
+                Learned Rules
+              </SectionHeading>
+              <p className="text-[13px] mt-2" style={{ color: 'var(--color-text-secondary)' }}>
                 After 3 repeated patterns, Friday proposes a shortcut and waits for your approval.
               </p>
 
-              {pendingRules.length === 0 ? (
-                <div
-                  className="p-4 rounded-lg text-xs text-center"
-                  style={{
-                    background: 'var(--color-bg)',
-                    color: 'var(--color-text-secondary)',
-                    border: '1px solid var(--color-border-subtle)',
-                  }}
-                >
-                  No pending rule proposals right now.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2.5">
-                  {pendingRules.map((rule) => (
-                    <div
-                      key={rule.id}
-                      className="p-3.5 rounded-lg flex flex-col gap-2"
-                      style={{
-                        background: 'var(--color-bg)',
-                        border: '1px solid var(--color-border)',
-                      }}
-                    >
-                      <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              <ul className="mt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
+                {pendingRules.length === 0 ? (
+                  <li className="py-4 text-[13px]" style={{ color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>
+                    No pending rule proposals right now.
+                  </li>
+                ) : (
+                  pendingRules.map((rule) => (
+                    <li key={rule.id} className="py-3 flex flex-col gap-1.5" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <div className="tn-mono text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
                         Observed {rule.repeats}× · {rule.pattern}
                       </div>
-                      <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                      <div className="text-[14px] font-medium" style={{ color: 'var(--color-text)' }}>
                         {rule.proposal}
                       </div>
                       <div className="flex items-center gap-2 pt-1">
-                        <button
-                          onClick={() => updateRule(rule.id, 'accepted')}
-                          className="flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium cursor-pointer"
-                          style={{
-                            background: 'var(--color-accent)',
-                            color: 'var(--color-on-accent)',
-                          }}
-                        >
-                          <Check size={12} />
+                        <button type="button" onClick={() => updateRule(rule.id, 'accepted')} className="tn-btn tn-btn-sm tn-btn-primary">
+                          <Check size={14} aria-hidden="true" />
                           Accept
                         </button>
-                        <button
-                          onClick={() => updateRule(rule.id, 'dismissed')}
-                          className="px-3 py-1 rounded-md text-xs font-medium cursor-pointer"
-                          style={{
-                            background: 'var(--color-bg-tertiary)',
-                            color: 'var(--color-text-secondary)',
-                          }}
-                        >
+                        <button type="button" onClick={() => updateRule(rule.id, 'dismissed')} className="tn-btn tn-btn-sm tn-btn-ghost">
                           Dismiss
                         </button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    </li>
+                  ))
+                )}
+              </ul>
             </section>
 
-            {/* Delivery Channels summary */}
-            <section className="studio-card p-5 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                  Reminder & Capture Channels
-                </h2>
-                <button
-                  onClick={() => navigate('/data-sources')}
-                  className="text-xs font-medium flex items-center gap-1 cursor-pointer"
-                  style={{ color: 'var(--color-accent)' }}
-                >
-                  Configure <ArrowUpRight size={12} />
-                </button>
-              </div>
-              <div className="flex flex-col gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                <div className="flex items-center justify-between py-1">
-                  <span>Voice Hotkey</span>
-                  <kbd
-                    className="px-2 py-0.5 rounded studio-mono"
-                    style={{
-                      background: 'var(--color-bg)',
-                      border: '1px solid var(--color-border)',
-                      color: 'var(--color-text)',
-                    }}
+            <section aria-labelledby="today-channels">
+              <SectionHeading
+                as="h2"
+                id="today-channels"
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => navigate('/data-sources')}
+                    className="inline-flex items-center gap-1 text-[13px] font-medium cursor-pointer underline-offset-[3px] hover:underline"
+                    style={{ color: 'var(--action)' }}
                   >
-                    Right Ctrl ×2
-                  </kbd>
+                    Configure <ArrowUpRight size={14} aria-hidden="true" />
+                  </button>
+                }
+              >
+                Reminder & Capture Channels
+              </SectionHeading>
+              <dl className="mt-1 text-[14px]">
+                <div className="flex items-center justify-between gap-3 py-2.5" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <dt style={{ color: 'var(--color-text-secondary)' }}>Voice Hotkey</dt>
+                  <dd><Kbd>Right Ctrl ×2</Kbd></dd>
                 </div>
-                <div className="flex items-center justify-between py-1">
-                  <span>Reminder Order</span>
-                  <span style={{ color: 'var(--color-text)' }}>Email → Telegram → Web</span>
+                <div className="flex items-center justify-between gap-3 py-2.5" style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <dt style={{ color: 'var(--color-text-secondary)' }}>Reminder Order</dt>
+                  <dd className="text-right" style={{ color: 'var(--color-text)' }}>Email → Telegram → Web</dd>
                 </div>
-              </div>
+              </dl>
             </section>
           </div>
         </div>
 
         {/* Future Roadmap (v2) */}
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-tight" style={{ color: 'var(--color-text-secondary)' }}>
-              Coming Next in Friday
-            </h2>
-            <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-              Planned v2 workspaces
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              {
-                icon: Clock,
-                title: 'Schedule Generation',
-                desc: 'Daily & weekly time-blocking built automatically from your deadlines.',
-              },
-              {
-                icon: Wallet,
-                title: 'Local-First Finance',
-                desc: 'Recurring bills and expected income routed privately with zero bank logins.',
-              },
-              {
-                icon: Trophy,
-                title: 'Achievement Prompts',
-                desc: 'Guided resume & portfolio bullets right after a project or hackathon win.',
-              },
-              {
-                icon: MessageSquare,
-                title: 'Career & Workload',
-                desc: 'Grounded discussions using your saved projects, pace, and goals.',
-              },
-            ].map((card) => {
-              const CardIcon = card.icon;
-              return (
-                <div
-                  key={card.title}
-                  className="p-4 rounded-xl flex flex-col gap-2"
-                  style={{
-                    background: 'var(--color-surface)',
-                    border: '1px solid var(--color-border-subtle)',
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <CardIcon size={16} style={{ color: 'var(--color-accent)' }} />
-                    <span
-                      className="text-[11px] px-2 py-0.5 rounded-full"
-                      style={{
-                        background: 'var(--color-bg-tertiary)',
-                        color: 'var(--color-text-tertiary)',
-                      }}
-                    >
-                      v2
-                    </span>
-                  </div>
-                  <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    {card.title}
-                  </div>
-                  <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-                    {card.desc}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+        <section aria-labelledby="today-roadmap" className="mt-14">
+          <SectionHeading as="h2" id="today-roadmap" actions={<StatusText tone="muted" mono={false}>Planned v2 workspaces</StatusText>}>
+            Coming Next in Friday
+          </SectionHeading>
+          <ul className="mt-1">
+            {ROADMAP.map((row) => (
+              <li
+                key={row.title}
+                className="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[220px_minmax(0,1fr)_auto] gap-x-6 gap-y-0.5 py-3"
+                style={{ borderBottom: '1px solid var(--color-border)' }}
+              >
+                <span className="text-[14px] font-medium" style={{ color: 'var(--color-text)' }}>{row.title}</span>
+                <span className="col-span-2 row-start-2 md:col-span-1 md:row-start-auto text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>
+                  {row.desc}
+                </span>
+                <span className="tn-mono text-[12px] col-start-2 row-start-1 md:col-start-auto" style={{ color: 'var(--color-text-tertiary)' }}>v2</span>
+              </li>
+            ))}
+          </ul>
         </section>
       </div>
     </div>

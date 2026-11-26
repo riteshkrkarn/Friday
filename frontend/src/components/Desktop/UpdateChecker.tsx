@@ -141,7 +141,7 @@ export function UpdateChecker() {
 
       {state === 'ready' && (
         <div style={styles.row}>
-          <span style={{ color: '#a6e3a1' }}>Update installed.</span>
+          <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>Update installed.</span>
           <div style={styles.actions}>
             <button style={styles.successBtn} onClick={handleRelaunch}>Relaunch now</button>
             <button style={styles.secondaryBtn} onClick={() => setDismissed(true)}>Later</button>
@@ -151,25 +151,38 @@ export function UpdateChecker() {
 
       {state === 'error' && (
         <div style={styles.row}>
-          <span style={{ color: '#f38ba8' }}>Update error: {errorMsg}</span>
+          <span style={{ color: 'var(--fail)', fontWeight: 500 }}>Update error: {errorMsg}</span>
         </div>
       )}
     </div>
   );
 }
 
+const btnBase: React.CSSProperties = {
+  height: '28px',
+  padding: '0 12px',
+  borderRadius: '2px',
+  fontSize: '13px',
+  fontWeight: 500,
+  fontFamily: 'var(--font-display)',
+  cursor: 'pointer',
+};
+
 const styles: Record<string, React.CSSProperties> = {
   banner: {
     padding: '10px 24px',
-    backgroundColor: '#181825',
-    borderBottom: '1px solid #313244',
+    backgroundColor: 'var(--color-surface)',
+    color: 'var(--color-text)',
+    borderTop: 'var(--rule-bar) solid var(--color-text)',
+    borderBottom: '1px solid var(--color-border)',
   },
   row: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: '16px',
-    fontSize: '13px',
+    fontSize: '14px',
   },
   actions: {
     display: 'flex',
@@ -177,55 +190,45 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
   },
   primaryBtn: {
-    padding: '4px 14px',
-    border: 'none',
-    borderRadius: '4px',
-    backgroundColor: '#89b4fa',
-    color: '#1e1e2e',
-    fontSize: '12px',
-    fontWeight: 600,
-    cursor: 'pointer',
+    ...btnBase,
+    border: '2px solid var(--action)',
+    backgroundColor: 'var(--action)',
+    color: 'var(--on-action)',
   },
   successBtn: {
-    padding: '4px 14px',
-    border: 'none',
-    borderRadius: '4px',
-    backgroundColor: '#a6e3a1',
-    color: '#1e1e2e',
-    fontSize: '12px',
-    fontWeight: 600,
-    cursor: 'pointer',
+    ...btnBase,
+    border: '2px solid var(--action)',
+    backgroundColor: 'var(--action)',
+    color: 'var(--on-action)',
   },
   secondaryBtn: {
-    padding: '4px 14px',
-    border: '1px solid #45475a',
-    borderRadius: '4px',
+    ...btnBase,
+    border: '2px solid var(--color-input-border)',
     backgroundColor: 'transparent',
-    color: '#a6adc8',
-    fontSize: '12px',
-    cursor: 'pointer',
+    color: 'var(--color-text)',
   },
   muteBtn: {
     padding: '0',
     border: 'none',
     backgroundColor: 'transparent',
-    color: '#585b70',
-    fontSize: '11px',
+    color: 'var(--color-text-secondary)',
+    fontSize: '12px',
     cursor: 'pointer',
     textDecoration: 'underline',
+    textUnderlineOffset: '3px',
   },
   progressBar: {
     flex: 1,
     maxWidth: '300px',
-    height: '6px',
-    backgroundColor: '#313244',
-    borderRadius: '3px',
+    height: '5px',
+    backgroundColor: 'var(--color-border)',
+    borderRadius: '0',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#89b4fa',
-    borderRadius: '3px',
-    transition: 'width 0.3s ease',
+    backgroundColor: 'var(--action)',
+    borderRadius: '0',
+    transition: 'width 160ms ease-out',
   },
 };

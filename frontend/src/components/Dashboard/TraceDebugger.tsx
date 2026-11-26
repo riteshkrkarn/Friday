@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { GitBranch, Clock, ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import { getBase, authHeaders } from '../../lib/api';
+import { lineForModel, type Line, type RouteStop } from '../../lib/transit-lines';
+import { RouteStrip, SectionHeading, Station } from '../transit';
 
 interface TraceStepData {
   model?: string;
@@ -24,49 +26,67 @@ interface TraceSummary {
   created_at: string;
 }
 
-const STEP_COLORS: Record<string, string> = {
-  route: 'var(--color-accent)',
-  retrieve: 'var(--color-success)',
-  generate: 'var(--color-warning)',
-  tool_call: 'var(--color-accent-purple)',
-  respond: 'var(--color-accent-purple)',
-};
+/**
+ * Which line a trace step runs on: tool steps on the tools line, retrieval
+ * and memory steps on the data line, generation by its model when known.
+ */
+function lineForStep(step: TraceStep): Line {
+  const type = step.step_type.toLowerCase();
+  if (type.includes('tool')) return 'tools';
+  if (type.includes('retriev') || type.includes('memory')) return 'data';
+  if (type.includes('generat')) {
+    const model = typeof step.data?.model === 'string' ? step.data.model : '';
+    return model ? lineForModel(model) : 'none';
+  }
+  return 'none';
+}
 
-function StepBadge({ type }: { type: string }) {
-  const color = STEP_COLORS[type] || 'var(--color-text-tertiary)';
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-      {type}
-    </span>
-  );
+function stringify(value: unknown): string {
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+function clip(text: string, max = 80): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function stopsForTrace(trace: TraceSummary): RouteStop[] {
+  return trace.steps.map((step, i) => ({
+    id: `${trace.id}-${i}`,
+    kind: step.step_type.toLowerCase().includes('tool') ? 'tool' : 'engine',
+    line: lineForStep(step),
+    label: step.step_type,
+    detail: `${step.duration_ms.toFixed(0)}ms`,
+    rows: Object.entries(step.data ?? {})
+      .filter(([, v]) => v != null)
+      .slice(0, 6)
+      .map(([key, value]) => ({ label: key, value: clip(stringify(value)) })),
+  }));
 }
 
 function TraceCard({ trace, isActive, onClick }: { trace: TraceSummary; isActive: boolean; onClick: () => void }) {
   const totalMs = trace.steps.reduce((sum, s) => sum + s.duration_ms, 0);
-
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="w-full text-left p-3 rounded-lg transition-colors cursor-pointer"
+      aria-pressed={isActive}
+      className="w-full text-left px-3 py-2.5 cursor-pointer transition-colors duration-[120ms] hover:bg-[var(--color-bg-tertiary)]"
       style={{
-        background: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
-        border: isActive ? '1px solid var(--color-border)' : '1px solid transparent',
+        borderBottom: '1px solid var(--color-border)',
+        background: isActive ? 'var(--color-accent-subtle)' : undefined,
       }}
-      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--color-bg-secondary)'; }}
-      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
     >
-      <div className="text-sm truncate mb-1" style={{ color: 'var(--color-text)' }}>
+      <div
+        className="text-[14px] truncate mb-0.5"
+        style={{ color: 'var(--color-text)', fontWeight: isActive ? 700 : 400 }}
+      >
         {trace.query || 'Untitled query'}
       </div>
-      <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+      <div className="tn-mono flex items-center gap-2 text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
         <span>{trace.steps.length} steps</span>
-        <span>&middot;</span>
+        <span aria-hidden="true">·</span>
         <span>{totalMs.toFixed(0)}ms</span>
-        <span>&middot;</span>
+        <span aria-hidden="true">·</span>
         <span>{new Date(trace.created_at).toLocaleTimeString()}</span>
       </div>
     </button>
@@ -78,41 +98,37 @@ function StepDetail({ step, index }: { step: TraceStep; index: number }) {
   const dataEntries = Object.entries(step.data).filter(([_, v]) => v != null);
 
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{ border: '1px solid var(--color-border)' }}
-    >
+    <div style={{ borderBottom: '1px solid var(--color-border)' }}>
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-3 py-2 text-sm transition-colors cursor-pointer"
-        style={{ background: 'var(--color-bg-secondary)' }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-secondary)')}
+        aria-expanded={expanded}
+        className="flex items-center gap-3 w-full px-1 py-2.5 text-[14px] cursor-pointer transition-colors duration-[120ms] hover:bg-[var(--color-bg-tertiary)]"
       >
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <span className="text-xs font-mono" style={{ color: 'var(--color-text-tertiary)' }}>
+        {expanded ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+        <span className="tn-mono text-[12px] w-5 text-right" style={{ color: 'var(--color-text-tertiary)' }}>
           {index + 1}
         </span>
-        <StepBadge type={step.step_type} />
+        <Station line={lineForStep(step)} size={12} />
+        <span className="tn-mono" style={{ color: 'var(--color-text)' }}>{step.step_type}</span>
         <span className="flex-1" />
-        <span className="text-xs font-mono flex items-center gap-1" style={{ color: 'var(--color-text-tertiary)' }}>
-          <Clock size={10} />
+        <span className="tn-mono text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
           {step.duration_ms.toFixed(0)}ms
         </span>
       </button>
       {expanded && dataEntries.length > 0 && (
-        <div className="px-3 py-2 text-xs" style={{ borderTop: '1px solid var(--color-border)' }}>
+        <dl className="pl-[60px] pr-1 pb-3 text-[13px]">
           {dataEntries.map(([key, value]) => (
-            <div key={key} className="flex gap-2 py-1">
-              <span className="font-mono shrink-0" style={{ color: 'var(--color-text-tertiary)', minWidth: '80px' }}>
+            <div key={key} className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 py-1">
+              <dt className="tn-mono" style={{ color: 'var(--color-text-tertiary)' }}>
                 {key}
-              </span>
-              <span className="truncate" style={{ color: 'var(--color-text-secondary)' }}>
-                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-              </span>
+              </dt>
+              <dd className="truncate" style={{ color: 'var(--color-text-secondary)' }}>
+                {stringify(value)}
+              </dd>
             </div>
           ))}
-        </div>
+        </dl>
       )}
     </div>
   );
@@ -144,33 +160,31 @@ export function TraceDebugger() {
 
   if (error) {
     return (
-      <div className="hud-panel p-6">
-        <h3 className="hud-label flex items-center gap-2 mb-4">
-          <GitBranch size={12} style={{ color: 'var(--color-accent)' }} />
-          Trace Debugger
-        </h3>
-        <div className="h-48 flex items-center justify-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-          <span className="hud-mono">{error}</span>
+      <section aria-labelledby="overview-traces">
+        <SectionHeading as="h2" id="overview-traces">Trace Debugger</SectionHeading>
+        <div className="h-48 flex items-center gap-2" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <Station line="none" state="failed" size={12} />
+          <span className="tn-mono text-[13px]" style={{ color: 'var(--fail)' }}>{error}</span>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="hud-panel p-6">
-      <h3 className="hud-label flex items-center gap-2 mb-4">
-        <GitBranch size={12} style={{ color: 'var(--color-accent)' }} />
-        Trace Debugger
-      </h3>
+    <section aria-labelledby="overview-traces">
+      <SectionHeading as="h2" id="overview-traces">Trace Debugger</SectionHeading>
 
       {traces.length === 0 ? (
-        <div className="h-48 flex items-center justify-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+        <div className="h-48 flex items-center text-[14px]" style={{ color: 'var(--color-text-tertiary)', borderBottom: '1px solid var(--color-border)' }}>
           No traces yet. Start making queries to see them here.
         </div>
       ) : (
-        <div className="flex gap-4 h-80">
+        <div className="flex flex-col lg:flex-row lg:h-[28rem]">
           {/* Trace list */}
-          <div className="w-1/3 overflow-y-auto flex flex-col gap-1 pr-2" style={{ borderRight: '1px solid var(--color-border)' }}>
+          <div
+            className="lg:w-[36%] max-h-72 lg:max-h-none overflow-y-auto flex flex-col shrink-0 lg:border-r"
+            style={{ borderColor: 'var(--color-border)' }}
+          >
             {traces.map((trace) => (
               <TraceCard
                 key={trace.id}
@@ -182,24 +196,27 @@ export function TraceDebugger() {
           </div>
 
           {/* Trace detail */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-w-0 overflow-y-auto pt-5 lg:pt-3 lg:pl-6">
             {selected ? (
-              <div className="flex flex-col gap-2">
-                <div className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>
+              <div className="flex flex-col">
+                <div className="text-[16px] font-bold mb-4" style={{ color: 'var(--color-text)' }}>
                   {selected.query}
                 </div>
-                {selected.steps.map((step, i) => (
-                  <StepDetail key={i} step={step} index={i} />
-                ))}
+                <RouteStrip stops={stopsForTrace(selected)} label="Trace route" className="mb-5" />
+                <div style={{ borderTop: '2px solid var(--color-text)' }}>
+                  {selected.steps.map((step, i) => (
+                    <StepDetail key={i} step={step} index={i} />
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div className="h-full min-h-24 flex items-center justify-center text-[14px]" style={{ color: 'var(--color-text-tertiary)' }}>
                 Select a trace to view details
               </div>
             )}
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

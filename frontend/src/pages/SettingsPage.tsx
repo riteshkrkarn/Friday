@@ -1,23 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import {
-  Palette,
-  Globe,
-  Cpu,
-  Database,
-  Info,
-  Check,
-  Sun,
-  Moon,
-  Monitor,
-  Download,
-  Upload,
-  Trash2,
-  Mic,
-  Key,
-  Search,
-  Brain,
-  RefreshCw,
-} from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { Check, Sun, Moon, Monitor, Download, Upload, Trash2, RefreshCw } from 'lucide-react';
 import { useAppStore, type ThemeMode } from '../lib/store';
 import { deviceTimeZone, listTimeZones, resolveTimeZone, utcOffsetLabel } from '../lib/timezone';
 import {
@@ -37,8 +19,14 @@ import {
   type MemoryStats,
 } from '../lib/api';
 import { isAutoUpdateDisabled, setAutoUpdateDisabled } from '../components/Desktop/UpdateChecker';
+import { LineMap, PageHeader, SectionHeading, Station, StatusText } from '../components/transit';
+import { lineColor, type Line, type StationState } from '../lib/transit-lines';
 
 const CLOUD_KEY_STATUS_CHANGED = 'openjarvis-cloud-key-status-changed';
+
+/** Control widths: full width in the single-column layout, fixed beside the label from md up. */
+const FIELD = 'tn-input md:w-64';
+const SELECT = 'tn-select md:w-64 cursor-pointer';
 
 function OllamaModelList() {
   const [models, setModels] = useState<Array<{ name: string; size: number }>>([]);
@@ -48,17 +36,18 @@ function OllamaModelList() {
       .then(data => setModels((data.models || []).map((m: any) => ({ name: m.name, size: m.size }))))
       .catch(() => setModels([]));
   }, []);
-  if (models.length === 0) return <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>No models loaded</span>;
+  if (models.length === 0) return <StatusText tone="muted" mono={false}>No models loaded</StatusText>;
   return (
-    <div className="flex flex-wrap gap-1">
-      {models.map(m => (
-        <span key={m.name} className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px]"
-          style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text)' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success)', display: 'inline-block' }} />
-          {m.name} ({(m.size / 1e9).toFixed(1)} GB)
-        </span>
-      ))}
-    </div>
+    <LineMap
+      label="Local models"
+      className="md:w-64"
+      items={models.map((m) => ({
+        id: m.name,
+        line: 'local' as const,
+        label: <span className="tn-mono text-[13px]">{m.name}</span>,
+        status: `${(m.size / 1e9).toFixed(1)} GB`,
+      }))}
+    />
   );
 }
 
@@ -143,32 +132,44 @@ function ApiKeyInput({
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="password"
-        value={value}
-        onChange={e => setValue(e.target.value)}
-        onBlur={() => { if (value.trim()) void save(value); }}
-        placeholder={hasKey ? (desktopKeyStorage ? 'Saved in secure storage' : 'Saved by local server') : placeholder}
-        disabled={!canManage}
-        className="w-48 px-2 py-1 rounded text-xs"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-      {hasKey && (
-        <button
-          onClick={() => void remove()}
-          className="px-2 py-1 rounded text-[10px] cursor-pointer"
-          style={{ color: 'var(--color-error)', border: '1px solid var(--color-error)' }}
-        >
-          Remove
-        </button>
+    <div className="flex flex-col gap-1 md:items-end">
+      <div className="flex items-center gap-2 w-full md:w-auto">
+        <input
+          type="password"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onBlur={() => { if (value.trim()) void save(value); }}
+          placeholder={hasKey ? (desktopKeyStorage ? 'Saved in secure storage' : 'Saved by local server') : placeholder}
+          disabled={!canManage}
+          className="tn-input tn-mono md:w-64"
+        />
+        {hasKey && (
+          <button type="button" onClick={() => void remove()} className="tn-btn tn-btn-sm tn-btn-danger">
+            Remove
+          </button>
+        )}
+      </div>
+      {(saved || error) && (
+        <span aria-live="polite">
+          {saved && <StatusText>Saved</StatusText>}
+          {error && <StatusText tone="fail" mono={false}>{error}</StatusText>}
+        </span>
       )}
-      {saved && <span className="text-[10px]" style={{ color: 'var(--color-success)' }}>Saved</span>}
-      {error && <span className="text-[10px]" style={{ color: 'var(--color-error)' }}>{error}</span>}
     </div>
   );
 }
 
-function CloudProviderStatus({ label, keyName }: { label: string; keyName: string }) {
+function CloudProviderStatus({
+  label,
+  keyName,
+  first,
+  last,
+}: {
+  label: string;
+  keyName: string;
+  first?: boolean;
+  last?: boolean;
+}) {
   const [hasKey, setHasKey] = useState(false);
   const desktopKeyStorage = isTauri();
 
@@ -192,40 +193,193 @@ function CloudProviderStatus({ label, keyName }: { label: string; keyName: strin
   }, [refresh]);
 
   return (
-    <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-      <span style={{
-        width: 6, height: 6, borderRadius: '50%', display: 'inline-block',
-        background: hasKey ? 'var(--color-success)' : 'var(--color-text-tertiary)',
-      }} />
-      {label}
-    </span>
+    <li className="tn-linemap-item">
+      {!first && (
+        <span aria-hidden="true" className="tn-linemap-rail" data-half="top" style={{ background: lineColor('cloud') }} />
+      )}
+      {!last && (
+        <span aria-hidden="true" className="tn-linemap-rail" data-half="bottom" style={{ background: lineColor('cloud') }} />
+      )}
+      <Station line="cloud" state={hasKey ? 'open' : 'unavailable'} className="relative z-[1]" />
+      <span className="flex-1 min-w-0 truncate text-[14px]" style={{ color: 'var(--color-text)' }}>{label}</span>
+      <StatusText tone={hasKey ? 'default' : 'muted'}>{hasKey ? 'key set' : 'no key'}</StatusText>
+    </li>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const CLOUD_PROVIDER_KEYS = [
+  { label: 'OpenAI', keyName: 'OPENAI_API_KEY' },
+  { label: 'Anthropic', keyName: 'ANTHROPIC_API_KEY' },
+  { label: 'Google', keyName: 'GEMINI_API_KEY' },
+  { label: 'OpenRouter', keyName: 'OPENROUTER_API_KEY' },
+  { label: 'Atlas Cloud', keyName: 'ATLASCLOUD_API_KEY' },
+];
+
+function Section({ title, id, children }: { title: string; id: string; children: ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="mt-12 first:mt-8">
+      <SectionHeading as="h2" id={id}>{title}</SectionHeading>
+      <div className="mt-1">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * A ruled two-column row: label and description on the left, the control on
+ * the right. One column below 768px. `station` marks rows that stand for a
+ * stop on the network (an engine, provider, tool or memory backend).
+ */
+function SettingRow({
+  label,
+  description,
+  station,
+  children,
+}: {
+  label: string;
+  description?: string;
+  station?: { line: Line; state?: StationState };
+  children: ReactNode;
+}) {
   return (
     <div
-      className="rounded-xl p-5"
-      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 gap-y-2 py-4"
+      style={{ borderBottom: '1px solid var(--color-border)' }}
     >
-      <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text)' }}>
-        {title}
-      </h3>
-      {children}
+      <div className="min-w-0 flex gap-3">
+        {station && <Station line={station.line} state={station.state} className="mt-[4px]" />}
+        <div className="min-w-0">
+          {label && <div className="text-[15px] font-medium" style={{ color: 'var(--color-text)' }}>{label}</div>}
+          {description && (
+            <div className="text-[13px] leading-[18px] mt-0.5 break-words max-w-[60ch]" style={{ color: 'var(--color-text-secondary)' }}>
+              {description}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="min-w-0 md:justify-self-end">{children}</div>
     </div>
   );
 }
 
-function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+/** A square-knob switch. Blue when on: blue is the selection colour. */
+function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
-    <div className="flex items-center justify-between py-3" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-      <div className="min-w-0">
-        <div className="text-sm" style={{ color: 'var(--color-text)' }}>{label}</div>
-        {description && (
-          <div className="text-xs mt-0.5 break-words" style={{ color: 'var(--color-text-tertiary)' }}>{description}</div>
-        )}
-      </div>
-      <div>{children}</div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      disabled={disabled}
+      className="relative inline-flex items-center h-[22px] w-[40px] shrink-0 cursor-pointer"
+      style={{
+        border: `2px solid ${checked ? 'var(--action)' : 'var(--color-input-border)'}`,
+        borderRadius: 2,
+        background: checked ? 'var(--action)' : 'transparent',
+        opacity: disabled ? 0.45 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'background-color 120ms ease-out, border-color 120ms ease-out',
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute top-[3px] left-[3px] h-3 w-3"
+        style={{
+          borderRadius: 1,
+          background: checked ? 'var(--on-action)' : 'var(--color-text-secondary)',
+          transform: checked ? 'translateX(18px)' : 'translateX(0)',
+          transition: 'transform 140ms ease-out, background-color 120ms ease-out',
+        }}
+      />
+    </button>
+  );
+}
+
+/** A 3-way segmented control; the chosen segment is filled with the action blue. */
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string; icon?: typeof Sun }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex w-full md:w-auto"
+      style={{ border: '2px solid var(--color-input-border)', borderRadius: 2 }}
+    >
+      {options.map((opt, i) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(opt.value)}
+            className="flex flex-1 md:flex-none items-center justify-center gap-1.5 h-8 px-3 text-[13px] font-medium cursor-pointer"
+            style={{
+              background: active ? 'var(--action)' : 'transparent',
+              color: active ? 'var(--on-action)' : 'var(--color-text-secondary)',
+              borderLeft: i > 0 ? '1px solid var(--color-border)' : undefined,
+              transition: 'background-color 120ms ease-out, color 120ms ease-out',
+            }}
+          >
+            {opt.icon && <opt.icon size={14} aria-hidden="true" />}
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Range input with its value printed beside it in mono. */
+function Range({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (raw: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 md:w-64">
+      <input
+        type="range"
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 min-w-0 cursor-pointer accent-[var(--action)]"
+      />
+      <output className="tn-mono text-[13px] w-12 text-right" style={{ color: 'var(--color-text)' }}>
+        {value}
+      </output>
     </div>
   );
 }
@@ -257,21 +411,20 @@ export function MemoryStatusRow({
       : stats
         ? `${stats.entries} entries`
         : 'Unavailable';
+  const stationState: StationState = status.kind === 'error'
+    ? 'failed'
+    : stats && stats.backend !== 'none'
+      ? 'open'
+      : 'unavailable';
 
   return (
-    <SettingRow label="Memory status" description={description}>
-      <div className="flex items-center gap-2">
-        <Brain size={14} style={{ color: stats && stats.backend !== 'none' ? 'var(--color-accent)' : 'var(--color-text-tertiary)' }} />
-        <span className="text-xs whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+    <SettingRow label="Memory status" description={description} station={{ line: 'data', state: stationState }}>
+      <div className="flex items-center gap-3">
+        <StatusText tone={status.kind === 'error' ? 'fail' : 'default'} className="whitespace-nowrap">
           {label}
-        </span>
+        </StatusText>
         {status.kind === 'error' && (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="text-xs underline cursor-pointer whitespace-nowrap"
-            style={{ color: 'var(--color-accent)' }}
-          >
+          <button type="button" onClick={onRetry} className="tn-btn tn-btn-sm">
             Retry
           </button>
         )}
@@ -284,6 +437,12 @@ const themeOptions: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
+];
+
+const fontSizeOptions: { value: 'small' | 'default' | 'large'; label: string }[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'default', label: 'Default' },
+  { value: 'large', label: 'Large' },
 ];
 
 export function SettingsPage() {
@@ -455,556 +614,405 @@ export function SettingsPage() {
     showSaved();
   };
 
+  const linkStyle = { color: 'var(--action)', textUnderlineOffset: 3 } as const;
+
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-10">
-      <div className="max-w-2xl mx-auto">
-        <header className="mb-6">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-              Settings
-            </h1>
-            {saved && (
-              <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{
-                background: 'var(--color-accent-subtle)',
-                color: 'var(--color-success)',
-              }}>
-                <Check size={12} /> Saved
-              </span>
-            )}
-          </div>
-          <p className="text-sm mt-2 max-w-2xl" style={{ color: 'var(--color-text-secondary)' }}>
-            App preferences — appearance, model defaults, keyboard shortcuts, and data management.
-          </p>
-        </header>
+    <div className="flex-1 overflow-y-auto px-4 md:px-8 py-8">
+      <div className="max-w-[880px] mx-auto pb-16">
+        <PageHeader
+          title="Settings"
+          actions={
+            <span aria-live="polite" className="h-5">
+              {saved && (
+                <span className="tn-mono inline-flex items-center gap-1 text-[12px]" style={{ color: 'var(--color-text-secondary)' }}>
+                  <Check size={12} aria-hidden="true" /> Saved
+                </span>
+              )}
+            </span>
+          }
+        />
+        <p className="text-[14px] mt-3 max-w-[65ch]" style={{ color: 'var(--color-text-secondary)' }}>
+          App preferences — appearance, model defaults, keyboard shortcuts, and data management.
+        </p>
 
-        <div className="flex flex-col gap-4">
-          {/* Appearance */}
-          <Section title="Appearance">
-            <SettingRow label="Theme" description="Choose how OpenJarvis looks">
-              <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--color-bg-secondary)' }}>
-                {themeOptions.map((opt) => {
-                  const isActive = settings.theme === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => { updateSettings({ theme: opt.value }); showSaved(); }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer"
-                      style={{
-                        background: isActive ? 'var(--color-surface)' : 'transparent',
-                        color: isActive ? 'var(--color-text)' : 'var(--color-text-tertiary)',
-                        boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
-                      }}
-                    >
-                      <opt.icon size={14} />
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </SettingRow>
-            <SettingRow label="Font size">
-              <select
-                value={settings.fontSize}
-                onChange={(e) => { updateSettings({ fontSize: e.target.value as any }); showSaved(); }}
-                className="text-sm px-3 py-1.5 rounded-lg outline-none cursor-pointer"
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <option value="small">Small</option>
-                <option value="default">Default</option>
-                <option value="large">Large</option>
-              </select>
-            </SettingRow>
-            <SettingRow
-              label="Time zone"
-              description={`Dates and times in answers use this zone. Now: ${resolveTimeZone(settings.timeZone)} (${utcOffsetLabel(resolveTimeZone(settings.timeZone))})`}
+        <Section title="Appearance" id="settings-appearance">
+          <SettingRow label="Theme" description="Choose how OpenJarvis looks">
+            <Segmented
+              label="Theme"
+              value={settings.theme}
+              options={themeOptions}
+              onChange={(v) => { updateSettings({ theme: v }); showSaved(); }}
+            />
+          </SettingRow>
+          <SettingRow label="Font size">
+            <Segmented
+              label="Font size"
+              value={settings.fontSize}
+              options={fontSizeOptions}
+              onChange={(v) => { updateSettings({ fontSize: v }); showSaved(); }}
+            />
+          </SettingRow>
+          <SettingRow
+            label="Time zone"
+            description={`Dates and times in answers use this zone. Now: ${resolveTimeZone(settings.timeZone)} (${utcOffsetLabel(resolveTimeZone(settings.timeZone))})`}
+          >
+            <select
+              aria-label="Time zone"
+              value={settings.timeZone}
+              onChange={(e) => { updateSettings({ timeZone: e.target.value }); showSaved(); }}
+              className={SELECT}
             >
-              <select
-                aria-label="Time zone"
-                value={settings.timeZone}
-                onChange={(e) => { updateSettings({ timeZone: e.target.value }); showSaved(); }}
-                className="text-sm px-3 py-1.5 rounded-lg outline-none cursor-pointer max-w-[14rem]"
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <option value="">Automatic ({deviceTimeZone()})</option>
-                {timeZones.map((zone) => (
-                  <option key={zone} value={zone}>{zone}</option>
-                ))}
-              </select>
-            </SettingRow>
-          </Section>
+              <option value="">Automatic ({deviceTimeZone()})</option>
+              {timeZones.map((zone) => (
+                <option key={zone} value={zone}>{zone}</option>
+              ))}
+            </select>
+          </SettingRow>
+        </Section>
 
-          {/* Connection */}
-          <Section title="Connection">
-            <SettingRow label="Server status" description={serverInfo ? `${serverInfo.engine} / ${serverInfo.model}` : 'Not connected'}>
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: healthy === true ? 'var(--color-success)' : healthy === false ? 'var(--color-error)' : 'var(--color-text-tertiary)' }}
+        <Section title="Connection" id="settings-connection">
+          <SettingRow
+            label="Server status"
+            description={serverInfo ? `${serverInfo.engine} / ${serverInfo.model}` : 'Not connected'}
+            station={{
+              line: 'local',
+              state: healthy === true ? 'open' : healthy === false ? 'failed' : 'unavailable',
+            }}
+          >
+            <StatusText tone={healthy === false ? 'fail' : 'default'}>
+              {healthy === true ? 'Connected' : healthy === false ? 'Disconnected' : 'Checking...'}
+            </StatusText>
+          </SettingRow>
+          <SettingRow label="API URL" description="Set if backend runs on a different port or host">
+            <input
+              type="text"
+              aria-label="API URL"
+              value={settings.apiUrl}
+              onChange={(e) => { updateSettings({ apiUrl: e.target.value }); showSaved(); }}
+              placeholder="http://localhost:8000"
+              className={`${FIELD} tn-mono`}
+            />
+          </SettingRow>
+          <SettingRow label="API key" description="Required only if the server was started with an API key">
+            <input
+              type="password"
+              aria-label="API key"
+              value={settings.apiKey}
+              onChange={(e) => { updateSettings({ apiKey: e.target.value }); showSaved(); }}
+              placeholder="OPENJARVIS_API_KEY"
+              autoComplete="off"
+              className={`${FIELD} tn-mono`}
+            />
+          </SettingRow>
+        </Section>
+
+        <Section title="Inference source" id="settings-inference">
+          <SettingRow
+            label="Source"
+            description="Where the app runs models. Applies after restart."
+            station={{ line: 'local' }}
+          >
+            <select
+              aria-label="Inference source"
+              value={srcKind}
+              onChange={(e) => { setSrcKind(e.target.value as InferenceSource['kind']); setSrcMsg(''); }}
+              className={SELECT}
+            >
+              <option value="ollama">Bundled Ollama (default)</option>
+              <option value="custom">Custom OpenAI-compatible server</option>
+            </select>
+          </SettingRow>
+          {srcKind === 'custom' && (
+            <>
+              <SettingRow label="Server URL" description="e.g. LM Studio: http://localhost:1234/v1">
+                <input type="text" aria-label="Server URL" value={customHost} onChange={(e) => { setCustomHost(e.target.value); setSrcMsg(''); }} placeholder="http://localhost:1234/v1"
+                  className={`${FIELD} tn-mono`} />
+              </SettingRow>
+              <SettingRow label="Model" description="Model id served by your endpoint">
+                <input type="text" aria-label="Model" value={customModel} onChange={(e) => { setCustomModel(e.target.value); setSrcMsg(''); }} placeholder="qwen2.5-7b-instruct"
+                  className={`${FIELD} tn-mono`} />
+              </SettingRow>
+              <SettingRow label="Server type" description="OpenAI-compatible engine">
+                <select aria-label="Server type" value={customEngine} onChange={(e) => { setCustomEngine(e.target.value); setSrcMsg(''); }}
+                  className={SELECT}>
+                  <option value="lmstudio">LM Studio</option>
+                  <option value="vllm">vLLM</option>
+                  <option value="sglang">SGLang</option>
+                  <option value="llamacpp">llama.cpp</option>
+                  <option value="mlx">MLX</option>
+                </select>
+              </SettingRow>
+              <SettingRow label="API key (optional)" description="Only if your server requires one">
+                <input type="password" aria-label="Custom server API key" value={customKey} onChange={(e) => { setCustomKey(e.target.value); setSrcMsg(''); }} placeholder="leave blank if none"
+                  className={`${FIELD} tn-mono`} />
+              </SettingRow>
+            </>
+          )}
+          <SettingRow label="" description={srcMsg}>
+            <button type="button" onClick={saveSource} className="tn-btn tn-btn-primary w-full md:w-auto">
+              Save inference source
+            </button>
+          </SettingRow>
+        </Section>
+
+        <Section title="Models" id="settings-models">
+          <SettingRow label="Local models (Ollama)" description="Models available for local inference">
+            <OllamaModelList />
+          </SettingRow>
+          <p className="text-[13px] py-3" style={{ color: 'var(--color-text-secondary)', borderBottom: '1px solid var(--color-border)' }}>
+            Run <code className="tn-mono px-1 py-0.5 text-[12px]" style={{ background: 'var(--color-code-bg)', borderRadius: 2 }}>ollama pull &lt;model-name&gt;</code> in your terminal to add more models
+          </p>
+          <SettingRow label="Cloud providers" description="A solid station means the API key is configured; dashed means no key">
+            <ul className="tn-linemap md:w-64" aria-label="Cloud providers">
+              {CLOUD_PROVIDER_KEYS.map((p, i) => (
+                <CloudProviderStatus
+                  key={p.keyName}
+                  label={p.label}
+                  keyName={p.keyName}
+                  first={i === 0}
+                  last={i === CLOUD_PROVIDER_KEYS.length - 1}
                 />
-                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                  {healthy === true ? 'Connected' : healthy === false ? 'Disconnected' : 'Checking...'}
-                </span>
-              </div>
-            </SettingRow>
-            <SettingRow label="API URL" description="Set if backend runs on a different port or host">
-              <input
-                type="text"
-                value={settings.apiUrl}
-                onChange={(e) => { updateSettings({ apiUrl: e.target.value }); showSaved(); }}
-                placeholder="http://localhost:8000"
-                className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                }}
-              />
-            </SettingRow>
-            <SettingRow label="API key" description="Required only if the server was started with an API key">
-              <input
-                type="password"
-                value={settings.apiKey}
-                onChange={(e) => { updateSettings({ apiKey: e.target.value }); showSaved(); }}
-                placeholder="OPENJARVIS_API_KEY"
-                autoComplete="off"
-                className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                }}
-              />
-            </SettingRow>
-          </Section>
+              ))}
+            </ul>
+          </SettingRow>
+        </Section>
 
-          {/* Inference source */}
-          <Section title="Inference source">
-            <SettingRow label="Source" description="Where the app runs models. Applies after restart.">
-              <select
-                value={srcKind}
-                onChange={(e) => { setSrcKind(e.target.value as InferenceSource['kind']); setSrcMsg(''); }}
-                className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
-                style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
-              >
-                <option value="ollama">Bundled Ollama (default)</option>
-                <option value="custom">Custom OpenAI-compatible server</option>
-              </select>
-            </SettingRow>
-            {srcKind === 'custom' && (
-              <>
-                <SettingRow label="Server URL" description="e.g. LM Studio: http://localhost:1234/v1">
-                  <input type="text" value={customHost} onChange={(e) => { setCustomHost(e.target.value); setSrcMsg(''); }} placeholder="http://localhost:1234/v1"
-                    className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
-                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} />
-                </SettingRow>
-                <SettingRow label="Model" description="Model id served by your endpoint">
-                  <input type="text" value={customModel} onChange={(e) => { setCustomModel(e.target.value); setSrcMsg(''); }} placeholder="qwen2.5-7b-instruct"
-                    className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
-                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} />
-                </SettingRow>
-                <SettingRow label="Server type" description="OpenAI-compatible engine">
-                  <select value={customEngine} onChange={(e) => { setCustomEngine(e.target.value); setSrcMsg(''); }}
-                    className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
-                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
-                    <option value="lmstudio">LM Studio</option>
-                    <option value="vllm">vLLM</option>
-                    <option value="sglang">SGLang</option>
-                    <option value="llamacpp">llama.cpp</option>
-                    <option value="mlx">MLX</option>
-                  </select>
-                </SettingRow>
-                <SettingRow label="API key (optional)" description="Only if your server requires one">
-                  <input type="password" value={customKey} onChange={(e) => { setCustomKey(e.target.value); setSrcMsg(''); }} placeholder="leave blank if none"
-                    className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
-                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} />
-                </SettingRow>
-              </>
-            )}
-            <SettingRow label="" description={srcMsg}>
-              <button onClick={saveSource}
-                className="text-sm px-3 py-1.5 rounded-lg outline-none cursor-pointer"
-                style={{ background: 'var(--color-accent, var(--color-bg-tertiary))', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
-                Save inference source
+        <Section title="API Keys" id="settings-keys">
+          <SettingRow label="OpenAI" description="GPT-4, GPT-3.5, etc." station={{ line: 'cloud' }}>
+            <ApiKeyInput keyName="OPENAI_API_KEY" placeholder="sk-..." />
+          </SettingRow>
+          <SettingRow label="Anthropic" description="Claude models" station={{ line: 'cloud' }}>
+            <ApiKeyInput keyName="ANTHROPIC_API_KEY" placeholder="sk-ant-..." />
+          </SettingRow>
+          <SettingRow label="Google" description="Gemini models" station={{ line: 'cloud' }}>
+            <ApiKeyInput keyName="GEMINI_API_KEY" placeholder="AI..." />
+          </SettingRow>
+          <SettingRow label="OpenRouter" description="Multi-provider routing" station={{ line: 'cloud' }}>
+            <ApiKeyInput keyName="OPENROUTER_API_KEY" placeholder="sk-or-..." />
+          </SettingRow>
+          <SettingRow label="Atlas Cloud" description="Models routed through Atlas Cloud" station={{ line: 'cloud' }}>
+            <ApiKeyInput keyName="ATLASCLOUD_API_KEY" placeholder="Atlas Cloud API key" />
+          </SettingRow>
+        </Section>
+
+        <Section title="Tools" id="settings-tools">
+          <SettingRow label="Web Search" description="Tavily key for web search tool" station={{ line: 'tools' }}>
+            <ApiKeyInput keyName="TAVILY_API_KEY" placeholder="tvly-..." toolName="web_search" />
+          </SettingRow>
+        </Section>
+
+        <Section title="Memory" id="settings-memory">
+          <MemoryStatusRow status={memoryStatus} onRetry={() => { void refreshMemoryStatus(); }} />
+          <SettingRow label="Use memory context" description="Automatically inject relevant memories into conversations">
+            <Switch
+              label="Use memory context"
+              checked={memoryEnabled}
+              onChange={() => {
+                const next = !memoryEnabled;
+                setMemoryEnabled(next);
+                try { localStorage.setItem('openjarvis-memory-enabled', String(next)); } catch {}
+                showSaved();
+              }}
+            />
+          </SettingRow>
+          <SettingRow label="Memory backend" description="Which retrieval engine to use">
+            <select
+              aria-label="Memory backend"
+              value={memoryBackend}
+              onChange={(e) => {
+                setMemoryBackend(e.target.value);
+                try { localStorage.setItem('openjarvis-memory-backend', e.target.value); } catch {}
+                showSaved();
+              }}
+              className={`${SELECT} tn-mono`}
+            >
+              <option value="sqlite">sqlite</option>
+              <option value="faiss">faiss</option>
+              <option value="bm25">bm25</option>
+              <option value="colbert">colbert</option>
+              <option value="hybrid">hybrid</option>
+            </select>
+          </SettingRow>
+          <SettingRow label="Results to inject">
+            <Range
+              label="Results to inject"
+              min={1}
+              max={20}
+              step={1}
+              value={memoryTopK}
+              onChange={(raw) => {
+                const v = parseInt(raw);
+                setMemoryTopK(v);
+                try { localStorage.setItem('openjarvis-memory-top-k', String(v)); } catch {}
+                showSaved();
+              }}
+            />
+          </SettingRow>
+          <SettingRow label="Min relevance score">
+            <Range
+              label="Min relevance score"
+              min={0}
+              max={1}
+              step={0.05}
+              value={memoryMinScore}
+              onChange={(raw) => {
+                const v = parseFloat(raw);
+                setMemoryMinScore(v);
+                try { localStorage.setItem('openjarvis-memory-min-score', String(v)); } catch {}
+                showSaved();
+              }}
+            />
+          </SettingRow>
+          <SettingRow label="Max context tokens">
+            <Range
+              label="Max context tokens"
+              min={256}
+              max={8192}
+              step={256}
+              value={memoryMaxTokens}
+              onChange={(raw) => {
+                const v = parseInt(raw);
+                setMemoryMaxTokens(v);
+                try { localStorage.setItem('openjarvis-memory-max-tokens', String(v)); } catch {}
+                showSaved();
+              }}
+            />
+          </SettingRow>
+        </Section>
+
+        <Section title="Model Defaults" id="settings-model-defaults">
+          <SettingRow label="Temperature">
+            <Range
+              label="Temperature"
+              min={0}
+              max={2}
+              step={0.1}
+              value={settings.temperature}
+              onChange={(raw) => { updateSettings({ temperature: parseFloat(raw) }); showSaved(); }}
+            />
+          </SettingRow>
+          <SettingRow label="Max tokens">
+            <Range
+              label="Max tokens"
+              min={256}
+              max={32768}
+              step={256}
+              value={settings.maxTokens}
+              onChange={(raw) => { updateSettings({ maxTokens: parseInt(raw) }); showSaved(); }}
+            />
+          </SettingRow>
+        </Section>
+
+        <Section title="Speech" id="settings-speech">
+          <SettingRow label="Speech-to-Text" description="Enable microphone input for voice dictation">
+            <Switch
+              label="Speech-to-Text"
+              checked={settings.speechEnabled}
+              onChange={() => { updateSettings({ speechEnabled: !settings.speechEnabled }); showSaved(); }}
+            />
+          </SettingRow>
+          <SettingRow label="Text-to-Speech" description="Show a read-aloud button on assistant replies">
+            <Switch
+              label="Text-to-Speech"
+              checked={settings.voiceOutputEnabled}
+              onChange={() => { updateSettings({ voiceOutputEnabled: !settings.voiceOutputEnabled }); showSaved(); }}
+            />
+          </SettingRow>
+          <SettingRow label="Speak replies automatically" description="Read every assistant reply aloud as soon as it finishes">
+            <Switch
+              label="Speak replies automatically"
+              checked={settings.voiceAutoplay && settings.voiceOutputEnabled}
+              disabled={!settings.voiceOutputEnabled}
+              onChange={() => { updateSettings({ voiceAutoplay: !settings.voiceAutoplay }); showSaved(); }}
+            />
+          </SettingRow>
+          <SettingRow label="Voice" description="Backend and voice used for spoken replies">
+            <StatusText tone={ttsBackend?.available ? 'default' : 'muted'}>
+              {ttsBackend === null ? 'Checking...'
+                : ttsBackend.available ? `${ttsBackend.backend}${ttsBackend.voice_id ? ` / ${ttsBackend.voice_id}` : ''}`
+                : 'Not configured'}
+            </StatusText>
+          </SettingRow>
+          <SettingRow label="Backend status" description="Requires Whisper, Deepgram, or another speech backend">
+            <StatusText tone={speechBackendAvailable ? 'default' : 'muted'}>
+              {speechBackendAvailable === null ? 'Checking...'
+                : speechBackendAvailable ? 'Available'
+                : 'Not configured'}
+            </StatusText>
+          </SettingRow>
+          {!speechBackendAvailable && speechBackendAvailable !== null && (
+            <p className="text-[13px] py-3" style={{ color: 'var(--color-text-secondary)' }}>
+              Set up a speech backend to use voice input.
+              See the <a href="https://open-jarvis.github.io/OpenJarvis/user-guide/tools/" target="_blank" rel="noopener noreferrer" className="underline" style={linkStyle}>documentation</a> for details.
+            </p>
+          )}
+        </Section>
+
+        <Section title="Data" id="settings-data">
+          <SettingRow label="Conversations" description={`${conversations.length} stored locally`}>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleExport} className="tn-btn tn-btn-sm">
+                <Download size={14} aria-hidden="true" /> Export
               </button>
-            </SettingRow>
-          </Section>
-
-          {/* Models */}
-          <Section title="Models">
-            <SettingRow label="Local models (Ollama)" description="Models available for local inference">
-              <OllamaModelList />
-            </SettingRow>
-            <div className="text-xs mt-2 px-1" style={{ color: 'var(--color-text-tertiary)' }}>
-              Run <code className="px-1 py-0.5 rounded text-[11px]" style={{ background: 'var(--color-bg-tertiary)' }}>ollama pull &lt;model-name&gt;</code> in your terminal to add more models
+              <button type="button" onClick={handleImport} className="tn-btn tn-btn-sm">
+                <Upload size={14} aria-hidden="true" /> Import
+              </button>
             </div>
-            <SettingRow label="Cloud providers" description="Green dot means API key is configured">
-              <div className="flex flex-wrap gap-3">
-                <CloudProviderStatus label="OpenAI" keyName="OPENAI_API_KEY" />
-                <CloudProviderStatus label="Anthropic" keyName="ANTHROPIC_API_KEY" />
-                <CloudProviderStatus label="Google" keyName="GEMINI_API_KEY" />
-                <CloudProviderStatus label="OpenRouter" keyName="OPENROUTER_API_KEY" />
-                <CloudProviderStatus label="Atlas Cloud" keyName="ATLASCLOUD_API_KEY" />
-              </div>
-            </SettingRow>
-          </Section>
+          </SettingRow>
+          <SettingRow label="Clear all data" description="Permanently delete all conversations">
+            <button
+              type="button"
+              onClick={handleClear}
+              className="tn-btn tn-btn-sm tn-btn-danger"
+              style={confirmClear ? { background: 'var(--fail)', color: 'var(--on-action)' } : undefined}
+            >
+              <Trash2 size={14} aria-hidden="true" /> {confirmClear ? 'Click again to confirm' : 'Clear'}
+            </button>
+          </SettingRow>
+        </Section>
 
-          {/* API Keys */}
-          <Section title="API Keys">
-            <SettingRow label="OpenAI" description="GPT-4, GPT-3.5, etc.">
-              <ApiKeyInput keyName="OPENAI_API_KEY" placeholder="sk-..." />
-            </SettingRow>
-            <SettingRow label="Anthropic" description="Claude models">
-              <ApiKeyInput keyName="ANTHROPIC_API_KEY" placeholder="sk-ant-..." />
-            </SettingRow>
-            <SettingRow label="Google" description="Gemini models">
-              <ApiKeyInput keyName="GEMINI_API_KEY" placeholder="AI..." />
-            </SettingRow>
-            <SettingRow label="OpenRouter" description="Multi-provider routing">
-              <ApiKeyInput keyName="OPENROUTER_API_KEY" placeholder="sk-or-..." />
-            </SettingRow>
-            <SettingRow label="Atlas Cloud" description="Models routed through Atlas Cloud">
-              <ApiKeyInput keyName="ATLASCLOUD_API_KEY" placeholder="Atlas Cloud API key" />
-            </SettingRow>
-          </Section>
+        <Section title="Updates" id="settings-updates">
+          <SettingRow label="Auto-update" description="Check for new desktop builds automatically every 30 minutes">
+            <Switch
+              label="Auto-update"
+              checked={autoUpdateEnabled}
+              onChange={() => handleAutoUpdateToggle(!autoUpdateEnabled)}
+            />
+          </SettingRow>
+          <SettingRow label="Check for updates" description="Manually check for a new version right now">
+            <button
+              type="button"
+              onClick={handleCheckNow}
+              className="tn-btn tn-btn-sm"
+              disabled={updateCheckState === 'checking'}
+            >
+              <RefreshCw size={14} aria-hidden="true" className={updateCheckState === 'checking' ? 'animate-spin' : ''} />
+              {updateCheckState === 'checking' && 'Checking...'}
+              {updateCheckState === 'available' && 'Update available — see banner above'}
+              {updateCheckState === 'latest' && 'Already up to date'}
+              {updateCheckState === 'idle' && 'Check now'}
+            </button>
+          </SettingRow>
+        </Section>
 
-          {/* Tools */}
-          <Section title="Tools">
-            <SettingRow label="Web Search" description="Tavily key for web search tool">
-              <ApiKeyInput keyName="TAVILY_API_KEY" placeholder="tvly-..." toolName="web_search" />
-            </SettingRow>
-          </Section>
-
-          {/* Memory */}
-          <Section title="Memory">
-            <MemoryStatusRow status={memoryStatus} onRetry={() => { void refreshMemoryStatus(); }} />
-            <SettingRow label="Use memory context" description="Automatically inject relevant memories into conversations">
-              <button
-                onClick={() => {
-                  const next = !memoryEnabled;
-                  setMemoryEnabled(next);
-                  try { localStorage.setItem('openjarvis-memory-enabled', String(next)); } catch {}
-                  showSaved();
-                }}
-                className="relative w-11 h-6 rounded-full transition-colors cursor-pointer"
-                style={{
-                  background: memoryEnabled ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-                }}
-              >
-                <span
-                  className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform bg-white"
-                  style={{
-                    transform: memoryEnabled ? 'translateX(20px)' : 'translateX(0)',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }}
-                />
-              </button>
-            </SettingRow>
-            <SettingRow label="Memory backend" description="Which retrieval engine to use">
-              <select
-                value={memoryBackend}
-                onChange={(e) => {
-                  setMemoryBackend(e.target.value);
-                  try { localStorage.setItem('openjarvis-memory-backend', e.target.value); } catch {}
-                  showSaved();
-                }}
-                className="text-sm px-3 py-1.5 rounded-lg outline-none cursor-pointer"
-                style={{
-                  background: 'var(--color-bg-secondary)',
-                  color: 'var(--color-text)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <option value="sqlite">sqlite</option>
-                <option value="faiss">faiss</option>
-                <option value="bm25">bm25</option>
-                <option value="colbert">colbert</option>
-                <option value="hybrid">hybrid</option>
-              </select>
-            </SettingRow>
-            <SettingRow label="Results to inject" description={`${memoryTopK}`}>
-              <input
-                type="range"
-                min="1"
-                max="20"
-                step="1"
-                value={memoryTopK}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value);
-                  setMemoryTopK(v);
-                  try { localStorage.setItem('openjarvis-memory-top-k', String(v)); } catch {}
-                  showSaved();
-                }}
-                className="w-32 cursor-pointer accent-[var(--color-accent)]"
-              />
-            </SettingRow>
-            <SettingRow label="Min relevance score" description={`${memoryMinScore}`}>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={memoryMinScore}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  setMemoryMinScore(v);
-                  try { localStorage.setItem('openjarvis-memory-min-score', String(v)); } catch {}
-                  showSaved();
-                }}
-                className="w-32 cursor-pointer accent-[var(--color-accent)]"
-              />
-            </SettingRow>
-            <SettingRow label="Max context tokens" description={`${memoryMaxTokens}`}>
-              <input
-                type="range"
-                min="256"
-                max="8192"
-                step="256"
-                value={memoryMaxTokens}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value);
-                  setMemoryMaxTokens(v);
-                  try { localStorage.setItem('openjarvis-memory-max-tokens', String(v)); } catch {}
-                  showSaved();
-                }}
-                className="w-32 cursor-pointer accent-[var(--color-accent)]"
-              />
-            </SettingRow>
-          </Section>
-
-          {/* Model defaults */}
-          <Section title="Model Defaults">
-            <SettingRow label="Temperature" description={`${settings.temperature}`}>
-              <input
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                value={settings.temperature}
-                onChange={(e) => { updateSettings({ temperature: parseFloat(e.target.value) }); showSaved(); }}
-                className="w-32 cursor-pointer accent-[var(--color-accent)]"
-              />
-            </SettingRow>
-            <SettingRow label="Max tokens" description={`${settings.maxTokens}`}>
-              <input
-                type="range"
-                min="256"
-                max="32768"
-                step="256"
-                value={settings.maxTokens}
-                onChange={(e) => { updateSettings({ maxTokens: parseInt(e.target.value) }); showSaved(); }}
-                className="w-32 cursor-pointer accent-[var(--color-accent)]"
-              />
-            </SettingRow>
-          </Section>
-
-          {/* Speech */}
-          <Section title="Speech">
-            <SettingRow label="Speech-to-Text" description="Enable microphone input for voice dictation">
-              <button
-                onClick={() => { updateSettings({ speechEnabled: !settings.speechEnabled }); showSaved(); }}
-                className="relative w-11 h-6 rounded-full transition-colors cursor-pointer"
-                style={{
-                  background: settings.speechEnabled ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-                }}
-              >
-                <span
-                  className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform bg-white"
-                  style={{
-                    transform: settings.speechEnabled ? 'translateX(20px)' : 'translateX(0)',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }}
-                />
-              </button>
-            </SettingRow>
-            <SettingRow label="Text-to-Speech" description="Show a read-aloud button on assistant replies">
-              <button
-                onClick={() => { updateSettings({ voiceOutputEnabled: !settings.voiceOutputEnabled }); showSaved(); }}
-                className="relative w-11 h-6 rounded-full transition-colors cursor-pointer"
-                style={{
-                  background: settings.voiceOutputEnabled ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-                }}
-              >
-                <span
-                  className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform bg-white"
-                  style={{
-                    transform: settings.voiceOutputEnabled ? 'translateX(20px)' : 'translateX(0)',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }}
-                />
-              </button>
-            </SettingRow>
-            <SettingRow label="Speak replies automatically" description="Read every assistant reply aloud as soon as it finishes">
-              <button
-                onClick={() => { updateSettings({ voiceAutoplay: !settings.voiceAutoplay }); showSaved(); }}
-                disabled={!settings.voiceOutputEnabled}
-                className="relative w-11 h-6 rounded-full transition-colors cursor-pointer"
-                style={{
-                  background: settings.voiceAutoplay && settings.voiceOutputEnabled ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
-                  opacity: settings.voiceOutputEnabled ? 1 : 0.4,
-                  cursor: settings.voiceOutputEnabled ? 'pointer' : 'default',
-                }}
-              >
-                <span
-                  className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform bg-white"
-                  style={{
-                    transform: settings.voiceAutoplay && settings.voiceOutputEnabled ? 'translateX(20px)' : 'translateX(0)',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  }}
-                />
-              </button>
-            </SettingRow>
-            <SettingRow label="Voice" description="Backend and voice used for spoken replies">
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{
-                    background: ttsBackend?.available ? 'var(--color-success)' : 'var(--color-text-tertiary)',
-                  }}
-                />
-                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                  {ttsBackend === null ? 'Checking...'
-                    : ttsBackend.available ? `${ttsBackend.backend}${ttsBackend.voice_id ? ` / ${ttsBackend.voice_id}` : ''}`
-                    : 'Not configured'}
-                </span>
-              </div>
-            </SettingRow>
-            <SettingRow label="Backend status" description="Requires Whisper, Deepgram, or another speech backend">
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{
-                    background: speechBackendAvailable === true ? 'var(--color-success)'
-                      : speechBackendAvailable === false ? 'var(--color-text-tertiary)'
-                      : 'var(--color-text-tertiary)',
-                  }}
-                />
-                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                  {speechBackendAvailable === null ? 'Checking...'
-                    : speechBackendAvailable ? 'Available'
-                    : 'Not configured'}
-                </span>
-              </div>
-            </SettingRow>
-            {!speechBackendAvailable && speechBackendAvailable !== null && (
-              <div className="text-xs mt-2 px-1" style={{ color: 'var(--color-text-tertiary)' }}>
-                Set up a speech backend to use voice input.
-                See the <a href="https://open-jarvis.github.io/OpenJarvis/user-guide/tools/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent)' }}>documentation</a> for details.
-              </div>
-            )}
-          </Section>
-
-          {/* Data */}
-          <Section title="Data">
-            <SettingRow label="Conversations" description={`${conversations.length} stored locally`}>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleExport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                  style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-secondary)')}
-                >
-                  <Download size={12} /> Export
-                </button>
-                <button
-                  onClick={handleImport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                  style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-tertiary)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-secondary)')}
-                >
-                  <Upload size={12} /> Import
-                </button>
-              </div>
-            </SettingRow>
-            <SettingRow label="Clear all data" description="Permanently delete all conversations">
-              <button
-                onClick={handleClear}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                style={{
-                  color: confirmClear ? 'white' : 'var(--color-error)',
-                  background: confirmClear ? 'var(--color-error)' : 'transparent',
-                  border: '1px solid var(--color-error)',
-                }}
-                onMouseEnter={(e) => { if (!confirmClear) e.currentTarget.style.background = 'rgba(220,38,38,0.1)'; }}
-                onMouseLeave={(e) => { if (!confirmClear) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <Trash2 size={12} /> {confirmClear ? 'Click again to confirm' : 'Clear'}
-              </button>
-            </SettingRow>
-          </Section>
-
-          {/* Updates */}
-          <Section title="Updates">
-            <SettingRow label="Auto-update" description="Check for new desktop builds automatically every 30 minutes">
-              <button
-                onClick={() => handleAutoUpdateToggle(!autoUpdateEnabled)}
-                className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
-                style={{ background: autoUpdateEnabled ? 'var(--color-accent)' : 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)' }}
-              >
-                <span
-                  className="inline-block h-3.5 w-3.5 rounded-full transition-transform"
-                  style={{
-                    background: 'white',
-                    transform: autoUpdateEnabled ? 'translateX(18px)' : 'translateX(2px)',
-                  }}
-                />
-              </button>
-            </SettingRow>
-            <SettingRow label="Check for updates" description="Manually check for a new version right now">
-              <button
-                onClick={handleCheckNow}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                style={{ background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', color: 'var(--color-text)', cursor: 'pointer' }}
-                disabled={updateCheckState === 'checking'}
-              >
-                <RefreshCw size={12} className={updateCheckState === 'checking' ? 'animate-spin' : ''} />
-                {updateCheckState === 'checking' && 'Checking...'}
-                {updateCheckState === 'available' && 'Update available — see banner above'}
-                {updateCheckState === 'latest' && 'Already up to date'}
-                {updateCheckState === 'idle' && 'Check now'}
-              </button>
-            </SettingRow>
-          </Section>
-
-          {/* About */}
-          <Section title="About">
-            <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              <p className="mb-2">
-                <span className="font-semibold" style={{ color: 'var(--color-text)' }}>OpenJarvis</span> — Programming abstractions for on-device AI.
-              </p>
-              <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
-                Part of Intelligence Per Watt, a research initiative at Stanford SAIL.
-              </p>
-              <div className="flex gap-3 mt-3 text-xs">
-                <a
-                  href="https://openjarvis.stanford.edu/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'var(--color-accent)' }}
-                >
-                  Project site
-                </a>
-                <a
-                  href="https://open-jarvis.github.io/OpenJarvis/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'var(--color-accent)' }}
-                >
-                  Documentation
-                </a>
-              </div>
+        <Section title="About" id="settings-about">
+          <div className="py-4 text-[14px]" style={{ color: 'var(--color-text-secondary)' }}>
+            <p className="mb-1">
+              <span className="font-bold" style={{ color: 'var(--color-text)' }}>OpenJarvis</span> — Programming abstractions for on-device AI.
+            </p>
+            <p className="text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
+              Part of Intelligence Per Watt, a research initiative at Stanford SAIL.
+            </p>
+            <div className="flex gap-5 mt-3 text-[13px]">
+              <a href="https://openjarvis.stanford.edu/" target="_blank" rel="noopener noreferrer" className="underline" style={linkStyle}>
+                Project site
+              </a>
+              <a href="https://open-jarvis.github.io/OpenJarvis/" target="_blank" rel="noopener noreferrer" className="underline" style={linkStyle}>
+                Documentation
+              </a>
             </div>
-          </Section>
-        </div>
+          </div>
+        </Section>
       </div>
     </div>
   );

@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  Sparkles,
   Terminal,
   Globe,
   ChevronDown,
@@ -9,7 +8,6 @@ import {
   Copy,
   Check,
   Cpu,
-  CheckCircle2,
   MessageSquare,
   ArrowRight,
   ArrowLeft,
@@ -18,11 +16,10 @@ import {
   Bell,
   Repeat,
   Bot,
-  BarChart3,
   Settings,
-  Database,
 } from 'lucide-react';
 import { isTauri, checkHealth } from '../lib/api';
+import { Kbd, LineBullet, SectionHeading, Station } from '../components/transit';
 
 interface WalkthroughStep {
   id: string;
@@ -139,22 +136,20 @@ function CodeBlock({ code }: { code: string }) {
 
   return (
     <div
-      className="relative group rounded-lg px-4 py-3 text-sm font-mono overflow-x-auto"
-      style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text)' }}
+      className="flex items-start gap-3 pl-4 pr-2 py-2"
+      style={{ background: 'var(--color-code-bg)', border: '1px solid var(--color-border)', borderRadius: 2 }}
     >
-      <pre className="whitespace-pre-wrap break-all">{code}</pre>
-      <button
-        onClick={handleCopy}
-        className="absolute top-2.5 right-2.5 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-        style={{ background: 'var(--color-surface)', color: 'var(--color-text-secondary)' }}
-        title="Copy"
-      >
-        {copied ? <Check size={14} /> : <Copy size={14} />}
+      <pre className="tn-mono flex-1 min-w-0 py-1 text-[13px] leading-[20px] whitespace-pre-wrap break-all" style={{ color: 'var(--color-text)' }}>
+        {code}
+      </pre>
+      <button type="button" onClick={handleCopy} className="tn-icon-btn shrink-0" title="Copy" aria-label={copied ? 'Copied' : 'Copy'}>
+        {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
       </button>
     </div>
   );
 }
 
+/** A ruled disclosure row; its body opens below the rule. */
 function Section({
   icon: Icon,
   title,
@@ -169,37 +164,44 @@ function Section({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-    >
+    <div style={{ borderBottom: '1px solid var(--color-border)' }}>
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer transition-colors"
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-secondary)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        aria-expanded={open}
+        className="w-full flex items-center gap-3 px-1 py-3.5 text-left cursor-pointer transition-colors duration-[120ms] hover:bg-[var(--color-bg-tertiary)]"
       >
-        <Icon size={18} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-        <span className="text-sm font-medium flex-1" style={{ color: 'var(--color-text)' }}>
+        <Icon size={16} aria-hidden="true" style={{ color: 'var(--color-text-secondary)', flexShrink: 0 }} />
+        <span className="text-[15px] font-medium flex-1" style={{ color: 'var(--color-text)' }}>
           {title}
         </span>
         {open ? (
-          <ChevronDown size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+          <ChevronDown size={16} aria-hidden="true" style={{ color: 'var(--color-text-tertiary)' }} />
         ) : (
-          <ChevronRight size={16} style={{ color: 'var(--color-text-tertiary)' }} />
+          <ChevronRight size={16} aria-hidden="true" style={{ color: 'var(--color-text-tertiary)' }} />
         )}
       </button>
-      {open && (
-        <div
-          className="px-5 pb-5 pt-1 flex flex-col gap-3"
-          style={{ borderTop: '1px solid var(--color-border-subtle)' }}
-        >
-          {children}
-        </div>
-      )}
+      {open && <div className="pl-8 pr-1 pb-5 flex flex-col gap-3">{children}</div>}
     </div>
   );
 }
+
+/** Letters match the sidebar bullets (C T A D O L S W). */
+const WORKSPACE_MAP = [
+  { letter: 'C', label: 'Chat', desc: 'Talk to Friday, run tools & Deep Research', path: '/' },
+  { letter: 'T', label: 'Today & Brief', desc: 'Morning brief, Item Store & learned rules', path: '/today' },
+  { letter: 'D', label: 'Data Sources', desc: 'Local folders, Email & Telegram channels', path: '/data-sources' },
+  { letter: 'O', label: 'Overview', desc: 'Energy, cost savings & execution traces', path: '/dashboard' },
+];
+
+const SHORTCUTS = [
+  { keys: 'Cmd/Ctrl+K', action: 'Switch model' },
+  { keys: 'Right Ctrl ×2', action: 'Voice Quick Capture' },
+  { keys: 'Cmd/Ctrl+I', action: 'Toggle System panel' },
+  { keys: 'Cmd/Ctrl+N', action: 'New chat' },
+];
+
+const SECONDARY = 'var(--color-text-secondary)';
 
 export function GetStartedPage() {
   const navigate = useNavigate();
@@ -212,231 +214,241 @@ export function GetStartedPage() {
   }, []);
 
   const step = WALKTHROUGH_STEPS[stepIdx];
-  const StepIcon = step.icon;
+  const last = WALKTHROUGH_STEPS.length - 1;
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-6 py-10 flex flex-col gap-8">
-        {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <div>
-            <div className="flex items-center gap-2 text-xs font-medium mb-1" style={{ color: 'var(--color-accent)' }}>
-              <Sparkles size={14} />
-              <span>Friday Walkthrough</span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--color-text)' }}>
-              Everything Friday can do
-            </h1>
-            <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+      <div className="max-w-[960px] mx-auto px-4 md:px-8 py-8 pb-16 flex flex-col">
+        <header className="tn-page-header">
+          <div className="min-w-0">
+            <h1 className="tn-page-title">Everything Friday can do</h1>
+            <p className="text-[14px] mt-1 max-w-[65ch]" style={{ color: SECONDARY }}>
               Step through Friday&apos;s core workflows or jump straight to any workspace.
             </p>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-4 shrink-0">
             {healthy === true && (
-              <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
-                <CheckCircle2 size={13} />
+              <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: SECONDARY }}>
+                <Station line="local" size={12} />
                 Server online
               </span>
             )}
-            <button
-              onClick={() => navigate('/')}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-opacity hover:opacity-90"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
-            >
-              <MessageSquare size={15} />
+            <button type="button" onClick={() => navigate('/')} className="tn-btn tn-btn-primary">
+              <MessageSquare size={16} aria-hidden="true" />
               Open Chat
             </button>
           </div>
         </header>
 
-        {/* Interactive Step-by-Step Walkthrough */}
-        <section
-          className="rounded-xl p-6 flex flex-col gap-5"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          {/* Step pills */}
-          <div className="flex flex-wrap gap-1.5">
+        {/* Walkthrough: six stations on one line */}
+        <section aria-labelledby="walkthrough-title" className="mt-10">
+          <SectionHeading as="h2" id="walkthrough-title">Friday Walkthrough</SectionHeading>
+
+          <ol className="mt-5 flex flex-col md:flex-row" aria-label="Walkthrough steps">
             {WALKTHROUGH_STEPS.map((s, idx) => {
               const active = idx === stepIdx;
-              const PillIcon = s.icon;
+              const passed = idx < stepIdx;
               return (
-                <button
-                  key={s.id}
-                  onClick={() => setStepIdx(idx)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors"
-                  style={{
-                    background: active ? 'var(--color-accent-subtle)' : 'var(--color-bg)',
-                    color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                    border: active
-                      ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)'
-                      : '1px solid var(--color-border)',
-                  }}
-                >
-                  <PillIcon size={13} />
-                  <span>{idx + 1}. {s.title.split('&')[0].trim()}</span>
-                </button>
+                <li key={s.id} className="relative md:flex-1 min-w-0">
+                  {idx < last && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-[5.5px] top-[18px] h-full w-[5px] md:left-[8px] md:top-[5.5px] md:h-[5px] md:w-full"
+                      style={{ background: passed ? 'var(--color-text)' : 'var(--color-input-border)', transition: 'background-color 160ms ease-out' }}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setStepIdx(idx)}
+                    aria-current={active ? 'step' : undefined}
+                    className="relative flex md:flex-col items-center md:items-start gap-3 md:gap-2 w-full py-2 md:py-0 pr-3 text-left cursor-pointer group"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="relative z-[1] w-4 h-4 shrink-0 rounded-full"
+                      style={{
+                        border: `3px solid ${active || passed ? 'var(--color-text)' : 'var(--color-input-border)'}`,
+                        background: active ? 'var(--color-text)' : 'var(--color-bg)',
+                        transition: 'background-color 160ms ease-out, border-color 160ms ease-out',
+                      }}
+                    />
+                    <span className="min-w-0">
+                      <span className="tn-mono block text-[11px] leading-[14px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                        {idx + 1}
+                      </span>
+                      <span
+                        className="block text-[13px] leading-[18px] group-hover:underline underline-offset-[3px]"
+                        style={{ color: active ? 'var(--color-text)' : SECONDARY, fontWeight: active ? 700 : 500 }}
+                      >
+                        {s.title.split('&')[0].trim()}
+                      </span>
+                    </span>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ol>
 
-          {/* Active step card */}
-          <div
-            className="rounded-xl p-5 flex flex-col gap-4"
-            style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border-subtle)' }}
-          >
-            <div className="flex items-start gap-3.5">
-              <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-                style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-              >
-                <StepIcon size={20} />
+          {/* Active step */}
+          <article className="tn-panel tn-rule-top mt-6 p-5 md:p-6 flex flex-col gap-4" aria-live="polite">
+            <div>
+              <div className="tn-mono text-[12px] mb-1" style={{ color: 'var(--color-text-tertiary)' }}>
+                Step {stepIdx + 1} of {WALKTHROUGH_STEPS.length}
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] font-mono uppercase tracking-wider mb-0.5" style={{ color: 'var(--color-text-tertiary)' }}>
-                  Step {stepIdx + 1} of {WALKTHROUGH_STEPS.length}
-                </div>
-                <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-                  {step.title}
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--color-accent)' }}>
-                  {step.subtitle}
-                </p>
-              </div>
+              <h3 className="text-[20px] leading-[26px] font-bold" style={{ color: 'var(--color-text)' }}>
+                {step.title}
+              </h3>
+              <p className="text-[14px] mt-1" style={{ color: SECONDARY }}>
+                {step.subtitle}
+              </p>
             </div>
 
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+            <p className="text-[15px] leading-[24px] max-w-[70ch]" style={{ color: 'var(--color-text)' }}>
               {step.description}
             </p>
 
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col">
               {step.highlights.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
-                  <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: 'var(--color-accent)' }} />
+                <li
+                  key={item}
+                  className="flex items-start gap-3 py-2 text-[14px]"
+                  style={{ color: 'var(--color-text)', borderTop: '1px solid var(--color-border)' }}
+                >
+                  <Check size={16} aria-hidden="true" className="mt-[3px] shrink-0" style={{ color: SECONDARY }} />
                   <span>{item}</span>
                 </li>
               ))}
             </ul>
 
-            <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
                   disabled={stepIdx === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{
-                    background: 'var(--color-surface)',
-                    color: 'var(--color-text-secondary)',
-                    border: '1px solid var(--color-border)',
-                  }}
+                  className="tn-btn tn-btn-sm"
                 >
-                  <ArrowLeft size={13} />
+                  <ArrowLeft size={14} aria-hidden="true" />
                   Previous
                 </button>
                 <button
+                  type="button"
                   onClick={() => setStepIdx((i) => Math.min(WALKTHROUGH_STEPS.length - 1, i + 1))}
                   disabled={stepIdx === WALKTHROUGH_STEPS.length - 1}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{
-                    background: 'var(--color-surface)',
-                    color: 'var(--color-text-secondary)',
-                    border: '1px solid var(--color-border)',
-                  }}
+                  className="tn-btn tn-btn-sm"
                 >
                   Next
-                  <ArrowRight size={13} />
+                  <ArrowRight size={14} aria-hidden="true" />
                 </button>
               </div>
 
-              <button
-                onClick={() => navigate(step.actionPath)}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-opacity hover:opacity-90"
-                style={{ background: 'var(--color-accent)', color: 'var(--color-on-accent)' }}
-              >
+              <button type="button" onClick={() => navigate(step.actionPath)} className="tn-btn tn-btn-sm tn-btn-primary">
                 {step.actionLabel}
-                <ArrowRight size={13} />
+                <ArrowRight size={14} aria-hidden="true" />
               </button>
             </div>
-          </div>
+          </article>
         </section>
 
         {/* Quick Workspace Map */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { icon: MessageSquare, label: 'Chat', desc: 'Talk to Friday, run tools & Deep Research', path: '/' },
-            { icon: CalendarCheck2, label: 'Today & Brief', desc: 'Morning brief, Item Store & learned rules', path: '/today' },
-            { icon: Database, label: 'Data Sources', desc: 'Local folders, Email & Telegram channels', path: '/data-sources' },
-            { icon: BarChart3, label: 'Overview', desc: 'Energy, cost savings & execution traces', path: '/dashboard' },
-          ].map((card) => {
-            const CardIcon = card.icon;
-            return (
-              <button
-                key={card.path}
-                onClick={() => navigate(card.path)}
-                className="text-left p-4 rounded-xl flex flex-col gap-1.5 cursor-pointer transition-colors"
-                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
-              >
-                <CardIcon size={16} style={{ color: 'var(--color-accent)' }} />
-                <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                  {card.label}
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-                  {card.desc}
-                </p>
-              </button>
-            );
-          })}
+        <section aria-labelledby="workspace-map" className="mt-12">
+          <SectionHeading as="h2" id="workspace-map">Workspace Map</SectionHeading>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+            {WORKSPACE_MAP.map((row) => (
+              <li key={row.path} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <button
+                  type="button"
+                  onClick={() => navigate(row.path)}
+                  className="group w-full flex items-start gap-3 px-1 py-3 text-left cursor-pointer transition-colors duration-[120ms] hover:bg-[var(--color-bg-tertiary)]"
+                >
+                  <LineBullet letter={row.letter} size={22} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[15px] font-medium" style={{ color: 'var(--color-text)' }}>{row.label}</span>
+                    <span className="block text-[13px] mt-0.5" style={{ color: SECONDARY }}>{row.desc}</span>
+                  </span>
+                  <ArrowRight
+                    size={16}
+                    aria-hidden="true"
+                    className="mt-1 shrink-0 transition-transform duration-[120ms] group-hover:translate-x-0.5"
+                    style={{ color: 'var(--color-text-tertiary)' }}
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
 
         {/* Shortcuts & Setup Reference */}
-        <div className="flex flex-col gap-3">
-          <Section icon={Cpu} title="Keyboard Shortcuts" defaultOpen>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd/Ctrl+K</kbd> Switch model</div>
-              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Right Ctrl ×2</kbd> Voice Quick Capture</div>
-              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd/Ctrl+I</kbd> Toggle System panel</div>
-              <div><kbd className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>Cmd/Ctrl+N</kbd> New chat</div>
-            </div>
-          </Section>
-
-          {!isDesktop && (
-            <Section icon={Terminal} title="CLI & Self-Hosted Commands">
-              <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                Start the Friday API server and Web UI locally:
-              </p>
-              <CodeBlock code={'jarvis serve --port 8000'} />
-              <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                Run diagnostics or start the interactive CLI:
-              </p>
-              <CodeBlock code={'jarvis doctor\njarvis chat'} />
+        <section aria-labelledby="setup-reference" className="mt-12">
+          <SectionHeading as="h2" id="setup-reference">Shortcuts & Setup Reference</SectionHeading>
+          <div className="flex flex-col">
+            <Section icon={Cpu} title="Keyboard Shortcuts" defaultOpen>
+              <table className="tn-table">
+                <thead>
+                  <tr>
+                    <th scope="col" className="w-48">Keys</th>
+                    <th scope="col">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SHORTCUTS.map((row) => (
+                    <tr key={row.keys}>
+                      <td><Kbd>{row.keys}</Kbd></td>
+                      <td style={{ color: 'var(--color-text)' }}>{row.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </Section>
-          )}
 
-          <Section icon={Settings} title="Cloud Keys & Environment">
-            <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-              Configure NVIDIA NIM, Groq, OpenAI, Anthropic, Gemini, Email SMTP, or Telegram tokens in Settings or your `.env` file.
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate('/settings')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
-                style={{ background: 'var(--color-bg-tertiary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
-              >
-                Open Settings <ArrowRight size={12} />
-              </button>
-            </div>
-          </Section>
+            {!isDesktop && (
+              <Section icon={Terminal} title="CLI & Self-Hosted Commands">
+                <p className="text-[13px]" style={{ color: SECONDARY }}>
+                  Start the Friday API server and Web UI locally:
+                </p>
+                <CodeBlock code={'jarvis serve --port 8000'} />
+                <p className="text-[13px]" style={{ color: SECONDARY }}>
+                  Run diagnostics or start the interactive CLI:
+                </p>
+                <CodeBlock code={'jarvis doctor\njarvis chat'} />
+              </Section>
+            )}
 
-          {!isDesktop && (
-            <Section icon={Globe} title="Telegram Bot Commands">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                <div><code className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>/capture &lt;note&gt;</code> Save an item</div>
-                <div><code className="font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg-tertiary)' }}>/brief</code> Get morning briefing</div>
+            <Section icon={Settings} title="Cloud Keys & Environment">
+              <p className="text-[13px] max-w-[65ch]" style={{ color: SECONDARY }}>
+                Configure NVIDIA NIM, Groq, OpenAI, Anthropic, Gemini, Email SMTP, or Telegram tokens in Settings or your <code className="tn-mono text-[12px]">.env</code> file.
+              </p>
+              <div>
+                <button type="button" onClick={() => navigate('/settings')} className="tn-btn tn-btn-sm">
+                  Open Settings <ArrowRight size={14} aria-hidden="true" />
+                </button>
               </div>
             </Section>
-          )}
-        </div>
+
+            {!isDesktop && (
+              <Section icon={Globe} title="Telegram Bot Commands">
+                <table className="tn-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" className="w-48">Command</th>
+                      <th scope="col">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><code className="tn-mono text-[13px]">/capture &lt;note&gt;</code></td>
+                      <td style={{ color: 'var(--color-text)' }}>Save an item</td>
+                    </tr>
+                    <tr>
+                      <td><code className="tn-mono text-[13px]">/brief</code></td>
+                      <td style={{ color: 'var(--color-text)' }}>Get morning briefing</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </Section>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
-import { DollarSign, TrendingDown, Cloud, HardDrive } from 'lucide-react';
 import { useAppStore } from '../../lib/store';
+import { SectionHeading, Station } from '../transit';
 
 const CLOUD_PRICING = [
   { name: 'GPT-5.6 Sol', input: 5.00, output: 30.00 },
@@ -12,15 +12,14 @@ export function CostComparison() {
 
   if (!savings || savings.total_tokens === 0) {
     return (
-      <div className="hud-panel p-6">
-        <h3 className="hud-label flex items-center gap-2 mb-4">
-          <DollarSign size={12} style={{ color: 'var(--color-success)' }} />
-          Cost Comparison
-        </h3>
-        <div className="h-48 flex items-center justify-center text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
-          <span className="hud-mono">awaiting first inference…</span>
+      <section aria-labelledby="overview-cost">
+        <SectionHeading as="h2" id="overview-cost">Cost Comparison</SectionHeading>
+        <div className="h-48 flex items-center" style={{ borderBottom: '1px solid var(--color-border)' }}>
+          <span className="tn-mono text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
+            awaiting first inference…
+          </span>
         </div>
-      </div>
+      </section>
     );
   }
 
@@ -28,74 +27,67 @@ export function CostComparison() {
   const completionK = savings.total_completion_tokens / 1000;
 
   return (
-    <div className="hud-panel p-6">
-      <h3 className="hud-label flex items-center gap-2 mb-4">
-        <DollarSign size={12} style={{ color: 'var(--color-success)' }} />
-        Cost Comparison*
-      </h3>
+    <section aria-labelledby="overview-cost">
+      <SectionHeading as="h2" id="overview-cost">Cost Comparison*</SectionHeading>
 
-      {/* Local stats */}
-      <div
-        className="flex items-center gap-3 p-3 rounded-lg mb-3"
-        style={{ background: 'var(--color-accent-subtle)', border: '1px solid var(--color-accent)' }}
-      >
-        <HardDrive size={18} style={{ color: 'var(--color-accent)' }} />
-        <div className="flex-1">
-          <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+      {/* Local: what this device actually spent */}
+      <div className="flex items-start gap-3 py-4" style={{ borderBottom: '2px solid var(--color-text)' }}>
+        <Station line="local" state="current" className="mt-[5px]" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[15px] font-bold" style={{ color: 'var(--color-text)' }}>
             Local (your hardware)
           </div>
-          <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            {savings.total_calls} requests &middot; {savings.total_tokens.toLocaleString()} tokens
+          <div className="tn-mono text-[12px] mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+            {savings.total_calls} requests · {savings.total_tokens.toLocaleString()} tokens
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-lg font-semibold" style={{ color: 'var(--color-success)' }}>
+        <div className="text-right shrink-0">
+          <div className="tn-mono text-[28px] leading-[32px] font-medium" style={{ color: 'var(--color-text)' }}>
             ${savings.local_cost.toFixed(4)}
           </div>
-          <div className="text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+          <div className="text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
             electricity only
           </div>
         </div>
       </div>
 
-      {/* Cloud comparisons */}
-      <div className="flex flex-col gap-2">
-        {CLOUD_PRICING.map((provider) => {
-          const cost = (promptK * provider.input / 1000) + (completionK * provider.output / 1000);
-          const saved = cost - savings.local_cost;
-          return (
-            <div
-              key={provider.name}
-              className="flex items-center gap-3 p-3 rounded-lg"
-              style={{ background: 'var(--color-bg-secondary)' }}
-            >
-              <Cloud size={16} style={{ color: 'var(--color-text-tertiary)' }} />
-              <div className="flex-1">
-                <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                  {provider.name}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-mono" style={{ color: 'var(--color-text)' }}>
+      {/* The same tokens priced on all-cloud routes */}
+      <table className="tn-table">
+        <caption className="sr-only">Same tokens on cloud models</caption>
+        <thead>
+          <tr>
+            <th scope="col">If sent to the cloud</th>
+            <th scope="col" style={{ textAlign: 'right' }}>Cost</th>
+            <th scope="col" style={{ textAlign: 'right', paddingRight: 0 }}>Saved</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CLOUD_PRICING.map((provider) => {
+            const cost = (promptK * provider.input / 1000) + (completionK * provider.output / 1000);
+            const saved = cost - savings.local_cost;
+            return (
+              <tr key={provider.name}>
+                <td>
+                  <span className="inline-flex items-center gap-2.5">
+                    <Station line="cloud" size={12} />
+                    <span style={{ color: 'var(--color-text)' }}>{provider.name}</span>
+                  </span>
+                </td>
+                <td className="tn-mono text-right" style={{ color: 'var(--color-text)' }}>
                   ${cost.toFixed(4)}
-                </div>
-                {saved > 0 && (
-                  <div className="text-[10px] flex items-center gap-0.5 justify-end" style={{ color: 'var(--color-success)' }}>
-                    <TrendingDown size={10} />
-                    ${saved.toFixed(4)} saved
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                </td>
+                <td className="tn-mono text-right" style={{ color: 'var(--color-text-secondary)', paddingRight: 0 }}>
+                  {saved > 0 ? `$${saved.toFixed(4)} saved` : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
 
-      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-        <p className="text-[10px] leading-relaxed" style={{ color: 'var(--color-text-tertiary)' }}>
-          *Savings estimates assume local models (e.g. Qwen, Nemotron, Kimi) produce roughly the same number of tokens per request, on average, as closed-source cloud models.
-        </p>
-      </div>
-    </div>
+      <p className="text-[12px] leading-[18px] mt-3 max-w-[70ch]" style={{ color: 'var(--color-text-tertiary)' }}>
+        *Savings estimates assume local models (e.g. Qwen, Nemotron, Kimi) produce roughly the same number of tokens per request, on average, as closed-source cloud models.
+      </p>
+    </section>
   );
 }

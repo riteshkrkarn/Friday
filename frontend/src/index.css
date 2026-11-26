@@ -963,10 +963,6 @@
     background: var(--color-bg-tertiary);
   }
 
-  .hud-backdrop {
-    display: none;
-  }
-
   /* Toasts (sonner) */
   .cn-toast {
     box-shadow: none !important;

@@ -7,134 +7,153 @@
 html,body,:root{
   background:transparent !important;
   background-color:transparent !important;
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;
-  color:#fff;height:100%;overflow:hidden;
+  font-family:"Segoe UI Variable","Segoe UI",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  color:#F2F2EE;height:100%;overflow:hidden;
 }
+::selection{background:#4F8CFF;color:#0A0A0A}
 #container{
   display:flex;flex-direction:column;
   height:100%;padding:8px 12px;
 }
 #messages{
   flex:1;overflow-y:auto;
-  display:flex;flex-direction:column;gap:6px;
-  margin-bottom:8px;padding:12px;
-  border-radius:16px;
-  background:rgba(30,30,30,0.88);
-  border:1px solid rgba(255,255,255,0.20);
+  display:flex;flex-direction:column;gap:10px;
+  margin-bottom:8px;padding:14px;
+  border-radius:2px;
+  background:#141414;
+  border:1px solid #2E2E2E;
+  border-top:4px solid #F2F2EE;
 }
 #messages:empty{display:none}
-#messages::-webkit-scrollbar{width:6px}
-#messages::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px}
+#messages::-webkit-scrollbar{width:8px}
+#messages::-webkit-scrollbar-thumb{background:#3A3A3A;border-radius:0}
+#messages::-webkit-scrollbar-thumb:hover{background:#6E6E69}
 #messages::-webkit-scrollbar-track{background:transparent}
 .msg{
-  padding:8px 12px;border-radius:12px;
-  font-size:13px;line-height:1.55;max-width:90%;
+  padding:8px 12px;border-radius:2px;
+  font-size:14px;line-height:1.5;max-width:90%;
   white-space:pre-wrap;word-wrap:break-word;
   -webkit-user-select:text;user-select:text;
 }
 .msg.user{
   align-self:flex-end;
-  background:rgba(59,130,246,0.35);
-  color:rgba(255,255,255,0.95);
+  background:#2E2E2E;
+  color:#FFFFFF;
 }
 .msg.assistant{
   align-self:flex-start;
-  background:rgba(255,255,255,0.20);
-  color:rgba(255,255,255,0.88);
+  padding:2px 0;
+  background:transparent;
+  color:#F2F2EE;
   white-space:normal;
 }
-.msg.assistant > p{margin:0 0 6px 0;white-space:pre-wrap}
+.msg.assistant > p{margin:0 0 8px 0;white-space:pre-wrap}
 .msg.assistant > p:last-child{margin-bottom:0}
 .msg.assistant h1,.msg.assistant h2,.msg.assistant h3{
-  font-size:14px;font-weight:600;margin:6px 0 4px 0;
+  font-size:14px;font-weight:700;margin:8px 0 4px 0;color:#FFFFFF;
 }
-.msg.assistant ul,.msg.assistant ol{margin:2px 0 6px 18px;padding:0}
-.msg.assistant li{margin:1px 0}
-.msg.assistant a{color:#93c5fd;text-decoration:underline}
+.msg.assistant ul,.msg.assistant ol{margin:2px 0 8px 18px;padding:0}
+.msg.assistant li{margin:2px 0}
+.msg.assistant a{color:#4F8CFF;text-decoration:underline;text-underline-offset:3px}
+.msg.assistant a:hover{color:#72A3FF}
 .msg.assistant code{
-  background:rgba(0,0,0,0.35);
-  padding:1px 5px;border-radius:4px;
-  font-family:"SF Mono",Menlo,Monaco,monospace;
+  background:#101010;
+  border:1px solid #2E2E2E;
+  padding:0 4px;border-radius:2px;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
   font-size:12px;
 }
 .msg.assistant pre{
-  background:rgba(0,0,0,0.40);
-  padding:8px 10px;border-radius:8px;
+  background:#101010;
+  padding:8px 10px;border-radius:2px;
   margin:4px 0;overflow-x:auto;
-  border:1px solid rgba(255,255,255,0.08);
+  border:1px solid #2E2E2E;
 }
 .msg.assistant pre code{
-  background:transparent;padding:0;border-radius:0;
-  font-size:11.5px;line-height:1.4;white-space:pre;
+  background:transparent;border:none;padding:0;border-radius:0;
+  font-size:12px;line-height:1.5;white-space:pre;
 }
-.msg.assistant strong{font-weight:600;color:#fff}
+.msg.assistant strong{font-weight:700;color:#FFFFFF}
 .msg.assistant em{font-style:italic}
-.msg.assistant del{opacity:0.6;text-decoration:line-through}
+.msg.assistant del{color:#8F8F8A;text-decoration:line-through}
 
-/* Streaming caret — pulses at the end of the in-progress bubble */
+/* Streaming caret at the end of the in-progress reply */
 .caret{
-  display:inline-block;width:6px;height:13px;
+  display:inline-block;width:2px;height:15px;
   vertical-align:text-bottom;margin-left:2px;
-  background:rgba(255,255,255,0.85);
+  background:#4F8CFF;
   animation:caret-blink 1s steps(1) infinite;
 }
 @keyframes caret-blink{50%{opacity:0}}
 
-/* Thinking dots — shown while waiting for the first token */
+/* Waiting for the first token: three stations fill in turn */
 .thinking{
-  display:inline-flex;gap:4px;align-items:center;padding:2px 0;
+  display:inline-flex;gap:6px;align-items:center;padding:4px 0;
 }
 .thinking span{
-  width:6px;height:6px;border-radius:50%;
-  background:rgba(255,255,255,0.65);
-  animation:thinking-bounce 1.2s ease-in-out infinite;
+  width:10px;height:10px;border-radius:50%;
+  border:2px solid #777777;background:transparent;
+  animation:thinking-fill 1.2s steps(1) infinite;
 }
-.thinking span:nth-child(2){animation-delay:0.15s}
-.thinking span:nth-child(3){animation-delay:0.30s}
-@keyframes thinking-bounce{
-  0%,60%,100%{transform:translateY(0);opacity:0.4}
-  30%{transform:translateY(-4px);opacity:1}
+.thinking span:nth-child(2){animation-delay:0.4s}
+.thinking span:nth-child(3){animation-delay:0.8s}
+@keyframes thinking-fill{
+  0%{background:#F2F2EE;border-color:#F2F2EE}
+  33%{background:transparent;border-color:#777777}
 }
 #input-bar{
   display:flex;align-items:center;gap:6px;
-  border-radius:16px;padding:6px 8px;
-  background:rgba(30,30,30,0.88);
-  border:1px solid rgba(255,255,255,0.20);
+  border-radius:2px;padding:6px;
+  background:#141414;
+  border:2px solid #6E6E69;
   flex-shrink:0;
+  transition:border-color .12s ease-out;
 }
+#input-bar:focus-within{border-color:#4F8CFF}
 #model-wrap{
   position:relative;flex-shrink:0;
 }
 #model-select{
-  background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);
-  border:none;border-radius:8px;padding:4px 22px 4px 8px;
+  background:#1C1C1C;color:#B5B5B0;
+  border:1px solid #2E2E2E;border-radius:2px;padding:4px 22px 4px 8px;
+  font-family:"JetBrains Mono","Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
   font-size:11px;outline:none;cursor:pointer;
-  max-width:140px;
+  max-width:150px;
   -webkit-appearance:none;appearance:none;
+  transition:border-color .12s ease-out,color .12s ease-out;
 }
-#model-select:hover{background:rgba(255,255,255,0.14);color:#fff}
+#model-select:hover{border-color:#6E6E69;color:#F2F2EE}
+#model-select:focus-visible{border-color:#4F8CFF;color:#F2F2EE}
 #model-wrap .arrow{
   position:absolute;right:7px;top:50%;transform:translateY(-50%);
-  pointer-events:none;color:rgba(255,255,255,0.35);
+  pointer-events:none;color:#8F8F8A;
 }
 #model-select option,#model-select optgroup{
-  background:#1e1e1e;color:#eee;
+  background:#1C1C1C;color:#F2F2EE;
 }
 #input{
-  flex:1;background:transparent;border:none;outline:none;
-  color:#fff;font-size:14px;padding:6px 10px;
+  flex:1;min-width:0;background:transparent;border:none;outline:none;
+  color:#F2F2EE;font-family:inherit;font-size:14px;padding:6px 8px;
+  caret-color:#4F8CFF;
 }
-#input::placeholder{color:rgba(255,255,255,0.35)}
+#input::placeholder{color:#8F8F8A}
 .btn{
   display:flex;align-items:center;justify-content:center;
-  width:30px;height:30px;border-radius:50%;border:none;
-  background:rgba(255,255,255,0.10);
-  color:rgba(255,255,255,0.6);cursor:pointer;
-  transition:background .15s,color .15s;flex-shrink:0;
+  width:30px;height:30px;border-radius:2px;border:none;
+  background:transparent;
+  color:#B5B5B0;cursor:pointer;
+  transition:background-color .12s ease-out,color .12s ease-out;flex-shrink:0;
 }
-.btn:hover{background:rgba(255,255,255,0.20);color:#fff}
-.btn:disabled{opacity:0.25;cursor:default}
-.btn:disabled:hover{background:rgba(255,255,255,0.10)}
+.btn:hover{background:#242424;color:#F2F2EE}
+.btn:focus-visible{outline:2px solid #4F8CFF;outline-offset:1px}
+#send-btn{background:#4F8CFF;color:#0A0A0A}
+#send-btn:hover{background:#72A3FF;color:#0A0A0A}
+.btn:disabled,#send-btn:disabled{opacity:0.35;cursor:default}
+.btn:disabled:hover{background:transparent;color:#B5B5B0}
+#send-btn:disabled:hover{background:#4F8CFF;color:#0A0A0A}
+@media (prefers-reduced-motion:reduce){
+  .caret,.thinking span{animation:none}
+}
 </style>
 </head>
 <body>
